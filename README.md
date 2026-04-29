@@ -1,4 +1,4 @@
-# PBL5 Foveated Teleoperation for Meta Quest 3
+# PBL5 Foveated Teleoperation for Meta Quest Pro
 
 A modern Unity-based teleoperation system for Pioneer robots, featuring **Gaze-Contingent Foveated Streaming** to optimize perceptual quality and bandwidth.
 
@@ -15,6 +15,8 @@ A modern Unity-based teleoperation system for Pioneer robots, featuring **Gaze-C
 
 ## Project Structure
 
+The Unity project is located in the `PBL5_FoveatedTeleoperation/` subfolder.
+
 - `Assets/Scripts/Network/`: TCP logic for drive commands and JPEG camera feed reception.
 - `Assets/Scripts/Control/`: Modernized input handling and gear-shift logic.
 - `Assets/Scripts/Gaze/`: Gaze coordinate providers and foveated shader controllers.
@@ -23,13 +25,16 @@ A modern Unity-based teleoperation system for Pioneer robots, featuring **Gaze-C
 
 ## Setup Instructions
 
-1. **Unity Version**: Use Unity 2022.3 LTS or newer.
+1. **Unity Version**: Use Unity 6 (6000.4.3f1) or newer.
 2. **Dependencies**: 
-   - Meta XR SDK (or Oculus Integration)
+   - Meta XR SDK (All-in-One)
    - XR Interaction Toolkit
    - Input System Package
 3. **Configuration**:
    - Create a `NetworkConfig` ScriptableObject via `Assets > Create > Teleoperation > Network Config`.
-   - Set the `Robot IP` and `Ports` (Standard: 1234 for Control, 1235 for Camera).
-4. **Input**: Ensure "Active Input Handling" is set to "Both" or "Input System Package" in Project Settings.
-5. **Shaders**: Assign the `Teleoperation/FoveatedFeed` shader to the Camera Feed `RawImage` material.
+   - Assign the `NetworkConfig` to the `RobotClient` and `TeleoperationController` scripts.
+4. **Scene Setup**:
+   - Add an **XR Origin (VR)**.
+   - Create a **RobotManager** GameObject with `RobotClient` and `TeleoperationController`.
+   - Create a **RawImage** for the viewport and attach `CameraFeedReceiver`, `GazeProvider`, and `FoveatedFeedController`.
+5. **Shaders**: Assign the `Teleoperation/FoveatedFeed` shader to a new Material and apply it to the viewport **RawImage**.
