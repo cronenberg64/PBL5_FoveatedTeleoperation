@@ -19,6 +19,10 @@ public class NetworkConfig : ScriptableObject
     [Tooltip("TCP port for receiving JPEG camera frames")]
     public int cameraPort = 1235;
 
+    [Header("Gaze Upload Connection")]
+    [Tooltip("TCP port for sending gaze UV coordinates to the server")]
+    public int gazePort = 1236;
+
     [Header("Protocol Constants")]
     [Tooltip("Neutral turn value (straight ahead)")]
     public int neutralTurn = 90;

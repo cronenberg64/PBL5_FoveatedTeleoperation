@@ -19,6 +19,10 @@ public class GazeProvider : MonoBehaviour
     [Tooltip("True if hardware eye tracking is active")]
     [SerializeField] private bool isEyeTrackingActive = false;
 
+    // Metrics: count updates per second
+    private int _updateCount;
+    private float _metricsWindowStart;
+
     [Header("Configuration")]
     [Tooltip("The camera feed plane(s) to raycast against for UV coordinates")]
     [SerializeField] private RectTransform[] feedPlanes;
@@ -53,6 +57,17 @@ public class GazeProvider : MonoBehaviour
     {
         Ray gazeRay = GetGazeRay();
         UpdateGazeUV(gazeRay);
+
+        _updateCount++;
+        float now = Time.time;
+        if (now - _metricsWindowStart >= 1f)
+        {
+            float hz = _updateCount / (now - _metricsWindowStart);
+            MetricsLogger.Instance?.Log("gaze_update", hz, 0f,
+                isEyeTrackingActive ? "eye" : "head");
+            _updateCount = 0;
+            _metricsWindowStart = now;
+        }
     }
 
     // ─── Eye Tracking Detection ─────────────────────────────────
