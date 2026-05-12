@@ -86,6 +86,8 @@ public class RobotClient : MonoBehaviour
                 byte[] data = Encoding.ASCII.GetBytes(cmd);
                 stream.Write(data, 0, data.Length);
                 lastCommand = cmd.TrimEnd('\n');
+                // packed: cmd digit is [1], turn is [2..4], speed is [5..7]
+                MetricsLogger.Instance?.Log("cmd_sent", data.Length, 0f, lastCommand);
             }
             catch (Exception ex)
             {

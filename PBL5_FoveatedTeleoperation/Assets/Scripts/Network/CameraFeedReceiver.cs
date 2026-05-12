@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
@@ -34,8 +35,9 @@ public class CameraFeedReceiver : MonoBehaviour
     private Thread receiveThread;
     private CancellationTokenSource cts;
 
-    // Thread-safe queue for passing JPEG byte arrays to the main thread
-    private readonly ConcurrentQueue<byte[]> frameQueue = new ConcurrentQueue<byte[]>();
+    // Thread-safe queue for passing (JPEG bytes, receive-timestamp) to main thread
+    private readonly ConcurrentQueue<(byte[] data, long receivedMs)> frameQueue =
+        new ConcurrentQueue<(byte[], long)>();
 
     private Texture2D feedTexture;
 
@@ -66,18 +68,29 @@ public class CameraFeedReceiver : MonoBehaviour
     private void Update()
     {
         // Dequeue and display the latest frame (skip intermediate frames)
-        byte[] latestFrame = null;
-        while (frameQueue.TryDequeue(out byte[] frame))
+        (byte[] data, long receivedMs) latestEntry = default;
+        bool hasFrame = false;
+        while (frameQueue.TryDequeue(out var entry))
         {
-            latestFrame = frame;
+            latestEntry = entry;
+            hasFrame = true;
         }
 
-        if (latestFrame != null)
+        if (hasFrame)
         {
-            if (feedTexture.LoadImage(latestFrame))
+            long decodeStart = Stopwatch.GetTimestamp();
+            if (feedTexture.LoadImage(latestEntry.data))
             {
                 feedDisplay.texture = feedTexture;
                 framesReceived++;
+
+                double decodeMs = (Stopwatch.GetTimestamp() - decodeStart)
+                    * 1000.0 / Stopwatch.Frequency;
+                MetricsLogger.Instance?.Log(
+                    "frame_received",
+                    latestEntry.data.Length,
+                    (float)decodeMs,
+                    "");
             }
         }
     }
@@ -136,7 +149,8 @@ public class CameraFeedReceiver : MonoBehaviour
                         // Enqueue for the main thread (keep queue small)
                         while (frameQueue.Count > 2)
                             frameQueue.TryDequeue(out _);
-                        frameQueue.Enqueue(jpegData);
+                        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        frameQueue.Enqueue((jpegData, nowMs));
                     }
                 }
             }
