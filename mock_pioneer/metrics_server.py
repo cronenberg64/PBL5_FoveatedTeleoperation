@@ -13,9 +13,18 @@ from typing import Optional
 
 
 class MetricsServer:
-    """Thread-safe CSV logger for server events."""
+    """Thread-safe, line-buffered CSV logger for server events."""
 
-    COLUMNS = ["t", "event", "bytes_out", "cmd_received", "gaze_uv", "quality_mode"]
+    COLUMNS = [
+        "t",
+        "event",
+        "bytes_total",
+        "bytes_periph",
+        "bytes_fovea",
+        "cmd_received",
+        "gaze_uv",
+        "quality_mode",
+    ]
 
     def __init__(self, log_dir: str = "logs") -> None:
         Path(log_dir).mkdir(parents=True, exist_ok=True)
@@ -31,15 +40,31 @@ class MetricsServer:
     def log(
         self,
         event: str,
-        bytes_out: int = 0,
+        bytes_total: int = 0,
+        bytes_periph: int = 0,
+        bytes_fovea: int = 0,
         cmd_received: str = "",
         gaze_uv: str = "",
         quality_mode: str = "",
     ) -> None:
+        """
+        Append one row to the session CSV.
+
+        Args:
+            event:        Event type string (e.g. "frame_sent", "cmd_received").
+            bytes_total:  Total payload bytes sent for frame events.
+            bytes_periph: Periphery JPEG bytes (gaze mode only).
+            bytes_fovea:  Foveal JPEG bytes (gaze mode only).
+            cmd_received: "cmd,turn,speed" string for control events.
+            gaze_uv:      "u,v" float string for gaze events.
+            quality_mode: Active mode at log time.
+        """
         row = {
             "t": f"{time.time():.4f}",
             "event": event,
-            "bytes_out": bytes_out,
+            "bytes_total": bytes_total,
+            "bytes_periph": bytes_periph,
+            "bytes_fovea": bytes_fovea,
             "cmd_received": cmd_received,
             "gaze_uv": gaze_uv,
             "quality_mode": quality_mode,

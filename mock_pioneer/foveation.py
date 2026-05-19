@@ -2,7 +2,7 @@
 Foveation encoding strategies for the mock Pioneer camera streamer.
 
 All functions return a raw bytes payload ready to send over the wire.
-The caller is responsible for framing (4-byte big-endian length prefix).
+The caller is responsible for the outer 4-byte big-endian length prefix.
 """
 
 import struct
@@ -28,74 +28,99 @@ def encode_uniform(frame: np.ndarray, quality: int) -> bytes:
     return buf.tobytes()
 
 
-def encode_gaze_contingent(
+def encode_dual_payload(
     frame: np.ndarray,
     gaze_uv: tuple[float, float],
-    foveal_quality: int = 50,
-    peripheral_quality: int = 5,
-    foveal_radius_px: int = 120,
-) -> bytes:
+    periph_quality: int = 15,
+    fovea_quality: int = 85,
+    fovea_size: int = 200,
+) -> tuple[bytes, dict]:
     """
-    Encode the frame using a gaze-contingent two-region strategy.
+    Encode the frame using a dual-payload gaze-contingent strategy.
 
-    A high-quality square ROI is cropped around the gaze point; the rest of
-    the frame is downsampled and encoded at low quality to represent the
-    bandwidth-cheap periphery.
+    The periphery is the full frame encoded at low quality.
+    The fovea is a square crop centred on the gaze point encoded at high quality.
+    The crop is clamped to frame bounds.
 
-    Custom container layout (NOTE: Unity Phase-5 decoder must match this):
-    ┌──────────────────────────────────────────────────────┐
-    │  4 bytes  int32 big-endian  ROI centre X (pixels)   │
-    │  4 bytes  int32 big-endian  ROI centre Y (pixels)   │
-    │  4 bytes  int32 big-endian  ROI side length (pixels) │
-    │  4 bytes  int32 big-endian  ROI JPEG byte count (R) │
-    │  R bytes                    ROI JPEG data            │
-    │  remaining bytes            periphery JPEG data      │
-    └──────────────────────────────────────────────────────┘
+    Dual-payload binary layout (see docs/PROTOCOL.md for the full spec):
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  Offset  Size  Type              Field                          │
+    │  0       4     uint32 big-endian len_periph                     │
+    │  4       4     uint32 big-endian len_fovea                      │
+    │  8       2     uint16 big-endian crop_x  (left edge, pixels)    │
+    │  10      2     uint16 big-endian crop_y  (top edge, pixels)     │
+    │  12      2     uint16 big-endian crop_w                         │
+    │  14      2     uint16 big-endian crop_h                         │
+    │  16      len_periph bytes        periphery JPEG                 │
+    │  16+len_periph  len_fovea bytes  foveal JPEG                    │
+    └─────────────────────────────────────────────────────────────────┘
 
-    The decoder reads the 16-byte header, reads R bytes of ROI JPEG, then
-    reads to end-of-frame-payload for the periphery JPEG.
+    The decoder should blit the foveal patch at (crop_x, crop_y) using the
+    server's recorded crop coords — NOT the current live gaze — to keep the
+    patch co-registered with what was actually encoded.
 
     Args:
-        frame:             BGR image array (H, W, 3).
-        gaze_uv:           (u, v) in [0.0, 1.0] UV space.
-        foveal_quality:    JPEG quality for the ROI patch.
-        peripheral_quality: JPEG quality for the downsampled full frame.
-        foveal_radius_px:  Half-side of the square ROI in pixels.
+        frame:          BGR image array (H, W, 3).
+        gaze_uv:        (u, v) in [0.0, 1.0] UV space.
+        periph_quality: JPEG quality for the full-frame periphery (default 15).
+        fovea_quality:  JPEG quality for the foveal crop (default 85).
+        fovea_size:     Side length of the square foveal crop in pixels (default 200).
 
     Returns:
-        Raw container bytes (header + ROI JPEG + periphery JPEG).
+        Tuple of (payload_bytes, stats_dict).
+        stats_dict has keys: periph_bytes, fovea_bytes, crop_x, crop_y, crop_w, crop_h.
     """
     h, w = frame.shape[:2]
-    u, v = float(np.clip(gaze_uv[0], 0.0, 1.0)), float(np.clip(gaze_uv[1], 0.0, 1.0))
+    u = float(np.clip(gaze_uv[0], 0.0, 1.0))
+    v = float(np.clip(gaze_uv[1], 0.0, 1.0))
 
+    # Gaze centre in pixel space.
+    # UV: u=0 left, u=1 right, v=0 bottom, v=1 top (image row 0 = top).
     cx = int(u * w)
-    cy = int((1.0 - v) * h)  # UV v=0 is bottom; image row 0 is top
-    r = int(foveal_radius_px)
+    cy = int((1.0 - v) * h)
+    half = fovea_size // 2
 
-    x0 = max(0, cx - r)
-    y0 = max(0, cy - r)
-    x1 = min(w, cx + r)
-    y1 = min(h, cy + r)
+    crop_x = int(np.clip(cx - half, 0, w))
+    crop_y = int(np.clip(cy - half, 0, h))
+    crop_x2 = int(np.clip(cx + half, 0, w))
+    crop_y2 = int(np.clip(cy + half, 0, h))
+    crop_w = crop_x2 - crop_x
+    crop_h = crop_y2 - crop_y
 
-    roi_patch = frame[y0:y1, x0:x1]
-    roi_side = max(x1 - x0, y1 - y0)
-
-    ok_roi, roi_buf = cv2.imencode(
-        ".jpg", roi_patch, [cv2.IMWRITE_JPEG_QUALITY, int(np.clip(foveal_quality, 1, 100))]
-    )
-    if not ok_roi:
-        raise RuntimeError("cv2.imencode failed for ROI patch")
-
-    # Periphery: quarter-resolution to save bandwidth
-    small = cv2.resize(frame, (w // 2, h // 2), interpolation=cv2.INTER_AREA)
-    ok_peri, peri_buf = cv2.imencode(
-        ".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, int(np.clip(peripheral_quality, 1, 100))]
-    )
-    if not ok_peri:
+    # ── Periphery: full frame at low quality ─────────────────────────────────
+    pq = int(np.clip(periph_quality, 1, 100))
+    ok_p, p_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, pq])
+    if not ok_p:
         raise RuntimeError("cv2.imencode failed for periphery")
+    periph_bytes = p_buf.tobytes()
 
-    roi_bytes = roi_buf.tobytes()
-    peri_bytes = peri_buf.tobytes()
+    # ── Fovea: cropped ROI at high quality ───────────────────────────────────
+    foveal_patch = frame[crop_y:crop_y2, crop_x:crop_x2]
+    fq = int(np.clip(fovea_quality, 1, 100))
+    ok_f, f_buf = cv2.imencode(".jpg", foveal_patch, [cv2.IMWRITE_JPEG_QUALITY, fq])
+    if not ok_f:
+        raise RuntimeError("cv2.imencode failed for foveal patch")
+    fovea_bytes = f_buf.tobytes()
 
-    header = struct.pack(">iiii", cx, cy, roi_side, len(roi_bytes))
-    return header + roi_bytes + peri_bytes
+    # ── Pack header + payloads ────────────────────────────────────────────────
+    # >: big-endian  II: two uint32  HHHH: four uint16
+    header = struct.pack(
+        ">IIHHHH",
+        len(periph_bytes),
+        len(fovea_bytes),
+        crop_x,
+        crop_y,
+        crop_w,
+        crop_h,
+    )
+    payload = header + periph_bytes + fovea_bytes
+
+    stats = {
+        "periph_bytes": len(periph_bytes),
+        "fovea_bytes": len(fovea_bytes),
+        "crop_x": crop_x,
+        "crop_y": crop_y,
+        "crop_w": crop_w,
+        "crop_h": crop_h,
+    }
+    return payload, stats

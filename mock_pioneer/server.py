@@ -9,12 +9,14 @@ Three concurrent TCP services:
 
 Usage:
     python server.py --mode uniform --quality 20
-    python server.py --mode gaze
+    python server.py --mode gaze --periph-quality 15 --fovea-quality 85
 
-See README.md for full option reference.
+See docs/PROTOCOL.md for the full payload format reference.
 """
 
 import argparse
+import queue
+import random
 import socket
 import struct
 import threading
@@ -24,7 +26,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from foveation import encode_uniform, encode_gaze_contingent
+from foveation import encode_uniform, encode_dual_payload
 from metrics_server import MetricsServer
 
 # ── Shared state ─────────────────────────────────────────────────────────────
@@ -35,6 +37,13 @@ _gaze_timestamp: float = 0.0          # epoch seconds of last valid gaze update
 _GAZE_STALE_TIMEOUT_S: float = 0.5   # fall back to centre after 500 ms
 
 _metrics: Optional[MetricsServer] = None
+
+# Set by camera_thread at startup; read by control/gaze threads for CSV logging
+_current_mode: str = "uniform"
+_current_quality: int = 20
+
+# Thread-safe queue for passing frames to the main thread for display (macOS requirement)
+_preview_queue = queue.Queue(maxsize=1)
 
 
 def _get_gaze() -> tuple[float, float]:
@@ -198,17 +207,22 @@ def gaze_thread(stop_event: threading.Event) -> None:
 
 # ── Camera streamer (port 1235) ───────────────────────────────────────────────
 
-_current_mode: str = "uniform"
-_current_quality: int = 20
-
-
 def _send_frame(conn: socket.socket, payload: bytes) -> None:
     """Send a length-prefixed frame matching CameraFeedReceiver.ReadExact protocol."""
     header = struct.pack(">I", len(payload))
     conn.sendall(header + payload)
 
 
-def camera_thread(stop_event: threading.Event, mode: str, quality: int) -> None:
+def camera_thread(
+    stop_event: threading.Event,
+    mode: str,
+    quality: int,
+    periph_quality: int,
+    fovea_quality: int,
+    fovea_size: int,
+    show: bool = False,
+    loss: float = 0.0,
+) -> None:
     global _current_mode, _current_quality
     _current_mode = mode
     _current_quality = quality
@@ -221,7 +235,10 @@ def camera_thread(stop_event: threading.Event, mode: str, quality: int) -> None:
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    print(f"[Camera] Webcam opened — mode={mode}, quality={quality}")
+    print(f"[Camera] Webcam opened — mode={mode}"
+          + (f", quality={quality}" if mode == "uniform"
+             else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
+                  f", fovea_size={fovea_size}"))
 
     server_sock = _make_server_socket(1235)
     server_sock.settimeout(1.0)
@@ -232,9 +249,19 @@ def camera_thread(stop_event: threading.Event, mode: str, quality: int) -> None:
             try:
                 conn, addr = server_sock.accept()
             except socket.timeout:
+                # If no client, but show is on, we still want to see the camera
+                if show:
+                    ok, frame = cap.read()
+                    if ok:
+                        # Push to queue for main thread to show
+                        try:
+                            _preview_queue.put_nowait(("Waiting for Client", frame))
+                        except queue.Full:
+                            pass
                 continue
 
             print(f"[Camera] Client connected: {addr}")
+            
             frame_interval = 1.0 / 20.0   # ~20 FPS target
 
             try:
@@ -250,23 +277,60 @@ def camera_thread(stop_event: threading.Event, mode: str, quality: int) -> None:
                     gaze = _get_gaze()
 
                     if mode == "gaze":
-                        payload = encode_gaze_contingent(frame, gaze)
+                        payload, stats = encode_dual_payload(
+                            frame,
+                            gaze,
+                            periph_quality=periph_quality,
+                            fovea_quality=fovea_quality,
+                            fovea_size=fovea_size,
+                        )
+                        
+                        if show:
+                            # Draw the ROI rectangle on a copy for the preview window
+                            preview = frame.copy()
+                            x, y = stats["crop_x"], stats["crop_y"]
+                            w, h = stats["crop_w"], stats["crop_h"]
+                            cv2.rectangle(preview, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                            cv2.putText(preview, f"FOVEA {w}x{h} @ {x},{y}", (10, 30),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                            try:
+                                _preview_queue.put_nowait(("Gaze Mode", preview))
+                            except queue.Full:
+                                pass
+                        
+                        if _metrics:
+                            _metrics.log(
+                                "frame_sent",
+                                bytes_total=len(payload),
+                                bytes_periph=stats["periph_bytes"],
+                                bytes_fovea=stats["fovea_bytes"],
+                                gaze_uv=f"{gaze[0]:.3f},{gaze[1]:.3f}",
+                                quality_mode=mode,
+                            )
                     else:
                         payload = encode_uniform(frame, quality)
+                        if show:
+                            try:
+                                _preview_queue.put_nowait((f"Uniform (Q={quality})", frame))
+                            except queue.Full:
+                                pass
+                        
+                        if _metrics:
+                            _metrics.log(
+                                "frame_sent",
+                                bytes_total=len(payload),
+                                gaze_uv=f"{gaze[0]:.3f},{gaze[1]:.3f}",
+                                quality_mode=f"{mode}-{quality}",
+                            )
 
                     try:
-                        _send_frame(conn, payload)
+                        if loss > 0 and random.random() < (loss / 100.0):
+                            pass # Simulate packet loss
+                        else:
+                            _send_frame(conn, payload)
                     except (BrokenPipeError, ConnectionResetError, OSError):
                         print("[Camera] Client disconnected mid-stream.")
                         break
-
-                    if _metrics:
-                        _metrics.log(
-                            "frame_sent",
-                            bytes_out=len(payload),
-                            gaze_uv=f"{gaze[0]:.3f},{gaze[1]:.3f}",
-                            quality_mode=mode,
-                        )
 
                     elapsed = time.time() - t0
                     sleep_t = frame_interval - elapsed
@@ -296,8 +360,7 @@ def main() -> None:
         "--mode",
         choices=["uniform", "gaze"],
         default="uniform",
-        help="Camera encoding mode (default: uniform). "
-             "'gaze' builds the two-region container but Unity won't consume it until Phase 5.",
+        help="Camera encoding mode. 'uniform' = single JPEG. 'gaze' = dual-payload ROI (default: uniform).",
     )
     parser.add_argument(
         "--quality",
@@ -307,15 +370,56 @@ def main() -> None:
         help="JPEG quality for uniform mode (default: 20). Ignored in gaze mode.",
     )
     parser.add_argument(
+        "--periph-quality",
+        type=int,
+        default=15,
+        metavar="Q",
+        help="Gaze mode: periphery JPEG quality 1–100 (default: 15).",
+    )
+    parser.add_argument(
+        "--fovea-quality",
+        type=int,
+        default=85,
+        metavar="Q",
+        help="Gaze mode: foveal crop JPEG quality 1–100 (default: 85).",
+    )
+    parser.add_argument(
+        "--fovea-size",
+        type=int,
+        default=200,
+        metavar="PX",
+        help="Gaze mode: side length of the square foveal crop in pixels (default: 200).",
+    )
+    parser.add_argument(
         "--log-dir",
         default="logs",
         help="Directory for session CSV logs (default: logs/)",
+    )
+    parser.add_argument(
+        "--show",
+        action="store_true",
+        help="Show local camera preview window with fovea ROI visualization.",
+    )
+    parser.add_argument(
+        "--loss",
+        type=float,
+        default=0.0,
+        metavar="N",
+        help="Simulate packet loss: drop N percent of payloads (0.0 to 100.0).",
     )
     args = parser.parse_args()
 
     global _metrics
     _metrics = MetricsServer(log_dir=args.log_dir)
-    _metrics.log("server_start", quality_mode=f"{args.mode}-{args.quality}")
+    mode_label = (
+        f"uniform-{args.quality}"
+        if args.mode == "uniform"
+        else f"gaze-p{args.periph_quality}-f{args.fovea_quality}"
+    )
+    if args.loss > 0:
+        mode_label += f"-loss{args.loss}%"
+    
+    _metrics.log("server_start", quality_mode=mode_label)
 
     stop_event = threading.Event()
 
@@ -324,7 +428,16 @@ def main() -> None:
         threading.Thread(target=gaze_thread,    args=(stop_event,), name="GazeThread",    daemon=True),
         threading.Thread(
             target=camera_thread,
-            args=(stop_event, args.mode, args.quality),
+            args=(
+                stop_event,
+                args.mode,
+                args.quality,
+                args.periph_quality,
+                args.fovea_quality,
+                args.fovea_size,
+                args.show,
+                args.loss,
+            ),
             name="CameraThread",
             daemon=True,
         ),
@@ -333,15 +446,34 @@ def main() -> None:
     for t in threads:
         t.start()
 
-    print(f"\n[Server] Running — mode={args.mode}, quality={args.quality}")
+    print(f"\n[Server] Running — mode={args.mode}"
+          + (f", quality={args.quality}" if args.mode == "uniform"
+             else f", periph_quality={args.periph_quality}"
+                  f", fovea_quality={args.fovea_quality}"
+                  f", fovea_size={args.fovea_size}"))
     print("[Server] Press Ctrl+C to stop.\n")
 
     try:
-        while True:
-            time.sleep(1)
+        while not stop_event.is_set():
+            if args.show:
+                try:
+                    # Polling the queue for frames to show (on main thread)
+                    label, frame = _preview_queue.get(timeout=0.1)
+                    cv2.imshow(f"Mock Pioneer - {label}", frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        print("[Server] 'q' pressed in preview window. Shutting down...")
+                        stop_event.set()
+                        break
+                except queue.Empty:
+                    pass
+            else:
+                time.sleep(0.1)
     except KeyboardInterrupt:
         print("\n[Server] Shutting down…")
         stop_event.set()
+
+    if args.show:
+        cv2.destroyAllWindows()
 
     for t in threads:
         t.join(timeout=3.0)

@@ -2,9 +2,6 @@
 
 Foveated Teleoperation — all three TCP channels.
 
-Baseline (Kirkpatrick 2024): control (1234) + camera (1235).
-Novel addition: gaze upstream (1236).
-
 ---
 
 ## Port 1234 — Control Commands (Unity → Server)
@@ -29,7 +26,7 @@ All ASCII. Total 9 bytes including newline.
 
 Example: `$1090256\n` → forward, straight, neutral speed.
 
-Source: Kirkpatrick (2024) §3.2; implemented in `RobotClient.SendDriveCommand`.
+Implemented in `RobotClient.SendDriveCommand`.
 
 ---
 
@@ -37,46 +34,80 @@ Source: Kirkpatrick (2024) §3.2; implemented in `RobotClient.SendDriveCommand`.
 
 Direction: server **sends**, Unity client **receives**.
 
-### Frame format
+### Outer framing (both modes)
 
 ```
 [4 bytes, big-endian uint32: payload length N]
-[N bytes: JPEG payload]
+[N bytes: payload — format depends on mode]
 ```
 
-In **uniform mode** the payload is a standard JPEG.  
-In **gaze-contingent mode** (Phase 5) the payload is the two-region container below.
+---
 
-### Uniform JPEG payload
+### Uniform mode payload
 
-A standard JPEG encoded by `cv2.imencode(".jpg", frame, [IMWRITE_JPEG_QUALITY, Q])`.  
-Quality factors Q used in the experiment: **50, 20, 10, 5** (matching Kirkpatrick).
-
-### Gaze-contingent container payload (Phase 5 — not yet consumed by Unity)
+A standard JPEG encoded at the quality factor chosen via `--quality`.
 
 ```
-[4 bytes, int32 big-endian: ROI centre X in pixels]
-[4 bytes, int32 big-endian: ROI centre Y in pixels]
-[4 bytes, int32 big-endian: ROI side length in pixels (square)]
-[4 bytes, int32 big-endian: ROI JPEG byte count R]
-[R bytes: ROI JPEG (high quality, foveal_quality=50)]
-[remaining bytes: periphery JPEG (low quality, peripheral_quality=5, half-resolution)]
+[N bytes: JPEG data]
 ```
 
-The Unity decoder (to be implemented in Phase 5, `CameraFeedReceiver`) must:
-1. Read the 16-byte header.
-2. Read exactly R bytes for the ROI JPEG.
-3. Read the remainder of the payload for the periphery JPEG.
-4. Composite: decode periphery as base texture, overlay the decoded ROI patch at (cx, cy).
+Quality levels used in experiments: **50, 20, 10, 5**.
 
-Implemented server-side in `mock_pioneer/foveation.py::encode_gaze_contingent`.
+---
+
+### Gaze-contingent (dual-payload) mode payload
+
+Activated via `--mode gaze`. The payload encodes the full frame at low quality
+(periphery) **and** a high-quality crop centred on the server's recorded gaze
+point (fovea). Unity composites the two at the crop coordinates embedded in the
+header — **not** at the current live gaze — so the patch is always
+co-registered with what the server actually encoded.
+
+> **Temporal note**: The foveal patch arrives with a small lag relative to
+> current gaze (server crops at gaze T-n; frame arrives at T). Compositing at
+> the *server's crop coords* is correct. Chasing live gaze with stale data
+> causes visible misregistration. This is a known trade-off; it is also why
+> total round-trip latency matters more than eye-tracker sample rate for
+> foveation systems.
+
+#### Dual-payload binary layout
+
+```
+Offset  Size  Type              Field
+──────────────────────────────────────────────────────────
+0       4     uint32 big-endian len_periph  — byte count of periphery JPEG
+4       4     uint32 big-endian len_fovea   — byte count of foveal JPEG
+8       2     uint16 big-endian crop_x      — foveal crop left edge (pixels)
+10      2     uint16 big-endian crop_y      — foveal crop top edge (pixels)
+12      2     uint16 big-endian crop_w      — foveal crop width (pixels)
+14      2     uint16 big-endian crop_h      — foveal crop height (pixels)
+16      len_periph  bytes       periph_jpeg — full-frame JPEG at low quality
+16+len_periph  len_fovea bytes  fovea_jpeg  — cropped ROI JPEG at high quality
+```
+
+Total header: **16 bytes**.
+
+#### Decode procedure (Unity `CameraFeedReceiver`)
+
+1. Read 16-byte header; unpack `len_periph`, `len_fovea`, `crop_x/y/w/h`.
+2. Read `len_periph` bytes → decode as background texture (full frame, low-res).
+3. Read `len_fovea` bytes → decode as foveal patch texture.
+4. Blit foveal patch onto background at `(crop_x, crop_y)` with size `(crop_w, crop_h)`.
+5. Hand composite texture to `FoveatedFeedController` / shader as normal.
+
+#### Encoding parameters (server defaults)
+
+| Parameter          | Value | Notes                              |
+|--------------------|-------|------------------------------------|
+| Peripheral quality | 15    | `--periph-quality` flag            |
+| Foveal quality     | 85    | `--fovea-quality` flag             |
+| Foveal crop size   | 200×200 px | `--fovea-size` flag (clamped to frame) |
 
 ---
 
 ## Port 1236 — Gaze Coordinates (Unity → Server)
 
-Direction: Unity client **sends**, server **receives**.  
-Novel addition (not in Kirkpatrick baseline).
+Direction: Unity client **sends**, server **receives**.
 
 ### Frame format
 
@@ -86,32 +117,30 @@ $GAZE[u:3][v:3]\n
 
 All ASCII. Total 12 bytes including newline.
 
-| Field   | Width | Values  | Semantics                                    |
-|---------|-------|---------|----------------------------------------------|
-| `$GAZE` | 5     | literal | Start-of-frame marker                        |
+| Field   | Width | Values  | Semantics                                     |
+|---------|-------|---------|-----------------------------------------------|
+| `$GAZE` | 5     | literal | Start-of-frame marker                         |
 | u       | 3     | 000–999 | Horizontal UV × 1000; 500 = horizontal centre |
-| v       | 3     | 000–999 | Vertical UV × 1000; 500 = vertical centre    |
-| `\n`    | 1     | `0x0A`  | End-of-frame                                 |
+| v       | 3     | 000–999 | Vertical UV × 1000; 500 = vertical centre     |
+| `\n`    | 1     | `0x0A`  | End-of-frame                                  |
 
 Example: `$GAZE500500\n` → gaze at the centre of the image.
 
-Sent at ~30 Hz by `GazeUploader.cs`.  
-The server maintains the latest non-stale gaze; values older than 500 ms fall back to (0.5, 0.5).
+Sent at ~30 Hz by `GazeUploader.cs` (or `MouseGazeSource.cs` for desktop proxy).
+The server holds the latest non-stale gaze; values older than 500 ms fall back to (0.5, 0.5).
 
 ---
 
 ## Gaze staleness and fallback
 
-The server's `_get_gaze()` function returns the centre `(0.5, 0.5)` if:
+The server's `_get_gaze()` returns `(0.5, 0.5)` if:
 - No gaze message has ever been received, **or**
 - The most recent gaze message is older than 500 ms.
-
-This prevents artefacts when the Unity client disconnects the gaze channel mid-session.
 
 ---
 
 ## Connection lifecycle
 
-All three services use `SO_REUSEADDR` and accept exactly one client per port.  
-On client disconnect the server loops back to `accept()` without crashing.  
+All three services use `SO_REUSEADDR` and accept exactly one client per port.
+On client disconnect the server loops back to `accept()` without crashing.
 Unity clients implement exponential back-off reconnection (1 s → 2 s → 4 s → … → 16 s max).

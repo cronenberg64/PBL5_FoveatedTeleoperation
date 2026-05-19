@@ -41,6 +41,27 @@ public class GazeProvider : MonoBehaviour
     /// <summary>Whether hardware eye tracking is being used.</summary>
     public bool IsEyeTrackingActive => isEyeTrackingActive;
 
+    // ── External override (MouseGazeSource, Tobii, etc.) ────────────────
+    // When set, skips the raycast entirely and feeds this value directly.
+    private bool _hasOverride = false;
+    private Vector2 _overrideUV = new Vector2(0.5f, 0.5f);
+
+    /// <summary>
+    /// Override the gaze UV with a value from an external source (e.g. mouse proxy,
+    /// Tobii). Clears automatically if <see cref="ClearGazeUVOverride"/> is called.
+    /// </summary>
+    public void SetGazeUVOverride(Vector2 uv)
+    {
+        _overrideUV = uv;
+        _hasOverride = true;
+    }
+
+    /// <summary>Remove any active override; resume normal gaze ray computation.</summary>
+    public void ClearGazeUVOverride()
+    {
+        _hasOverride = false;
+    }
+
     // ─── Lifecycle ──────────────────────────────────────────────
 
     private void Start()
@@ -55,8 +76,15 @@ public class GazeProvider : MonoBehaviour
 
     private void Update()
     {
-        Ray gazeRay = GetGazeRay();
-        UpdateGazeUV(gazeRay);
+        if (_hasOverride)
+        {
+            gazeUV = _overrideUV;
+        }
+        else
+        {
+            Ray gazeRay = GetGazeRay();
+            UpdateGazeUV(gazeRay);
+        }
 
         _updateCount++;
         float now = Time.time;
@@ -64,7 +92,7 @@ public class GazeProvider : MonoBehaviour
         {
             float hz = _updateCount / (now - _metricsWindowStart);
             MetricsLogger.Instance?.Log("gaze_update", hz, 0f,
-                isEyeTrackingActive ? "eye" : "head");
+                _hasOverride ? "override" : (isEyeTrackingActive ? "eye" : "head"));
             _updateCount = 0;
             _metricsWindowStart = now;
         }
