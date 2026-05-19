@@ -102,7 +102,7 @@ public class GazeProvider : MonoBehaviour
 
     private void CheckEyeTrackingAvailability()
     {
-#if META_XR_SDK
+#if META_XR_SDK && false
         try
         {
             // Check if eye tracking is supported and enabled
@@ -126,7 +126,7 @@ public class GazeProvider : MonoBehaviour
 
     private Ray GetGazeRay()
     {
-#if META_XR_SDK
+#if META_XR_SDK && false
         if (isEyeTrackingActive)
         {
             return GetEyeTrackingRay();
@@ -144,7 +144,7 @@ public class GazeProvider : MonoBehaviour
         return new Ray(vrCamera.transform.position, vrCamera.transform.forward);
     }
 
-#if META_XR_SDK
+#if META_XR_SDK && false
     /// <summary>Eye-tracking ray using OVRPlugin (Quest Pro).</summary>
     private Ray GetEyeTrackingRay()
     {

@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.UI;
+using Debug = UnityEngine.Debug;
 
 /// <summary>
 /// Receives camera frames over TCP from the mock Pioneer server and renders
@@ -117,10 +118,43 @@ public class CameraFeedReceiver : MonoBehaviour
 
     private void Update()
     {
-        if (dualPayloadMode)
-            ApplyDualFrames();
-        else
-            ApplyUniformFrames();
+        // Drain both queues to keep only the latest frames
+        bool hasUniform = false;
+        UniformFrame latestUniform = default;
+        while (_uniformQueue.TryDequeue(out var uf))
+        {
+            latestUniform = uf;
+            hasUniform = true;
+        }
+
+        bool hasDual = false;
+        DualFrame latestDual = default;
+        while (_dualQueue.TryDequeue(out var df))
+        {
+            latestDual = df;
+            hasDual = true;
+        }
+
+        // Apply the newer of the two frames based on the timestamp
+        if (hasUniform && hasDual)
+        {
+            if (latestDual.ReceivedMs >= latestUniform.ReceivedMs)
+            {
+                ApplyDualFrame(latestDual);
+            }
+            else
+            {
+                ApplyUniformFrame(latestUniform);
+            }
+        }
+        else if (hasDual)
+        {
+            ApplyDualFrame(latestDual);
+        }
+        else if (hasUniform)
+        {
+            ApplyUniformFrame(latestUniform);
+        }
     }
 
     private void OnDestroy()  => Shutdown();
@@ -128,13 +162,8 @@ public class CameraFeedReceiver : MonoBehaviour
 
     // ── Main-thread frame application ──────────────────────────────────────
 
-    private void ApplyUniformFrames()
+    private void ApplyUniformFrame(UniformFrame latest)
     {
-        UniformFrame latest = default;
-        bool hasFrame = false;
-        while (_uniformQueue.TryDequeue(out var f)) { latest = f; hasFrame = true; }
-        if (!hasFrame) return;
-
         long decodeStart = Stopwatch.GetTimestamp();
         if (_periphTex.LoadImage(latest.JpegData))
         {
@@ -145,13 +174,8 @@ public class CameraFeedReceiver : MonoBehaviour
         }
     }
 
-    private void ApplyDualFrames()
+    private void ApplyDualFrame(DualFrame latest)
     {
-        DualFrame latest = default;
-        bool hasFrame = false;
-        while (_dualQueue.TryDequeue(out var f)) { latest = f; hasFrame = true; }
-        if (!hasFrame) return;
-
         long decodeStart = Stopwatch.GetTimestamp();
 
         // 1. Decode periphery as the base texture
@@ -159,12 +183,18 @@ public class CameraFeedReceiver : MonoBehaviour
         if (!ok) return;
 
         // 2. Decode the foveal patch
-        if (!_foveaTex.LoadImage(latest.FoveaJpeg)) return;
-
-        // 3. Blit foveal patch onto periphery at server's recorded crop coords.
-        //    Periphery is the full original frame size (server sends full-res, low-Q).
-        //    We blit pixel by pixel via GetPixels32 / SetPixels32 for correctness.
-        BlitFoveaOntoBase(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
+        if (latest.FoveaJpeg != null && latest.FoveaJpeg.Length > 0)
+        {
+            if (_foveaTex == null)
+            {
+                _foveaTex = new Texture2D(2, 2, TextureFormat.RGB24, false);
+            }
+            if (_foveaTex.LoadImage(latest.FoveaJpeg))
+            {
+                // 3. Blit foveal patch onto periphery at server's recorded crop coords.
+                BlitFoveaOntoBase(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
+            }
+        }
 
         feedDisplay.texture = _periphTex;
         framesReceived++;
@@ -186,6 +216,9 @@ public class CameraFeedReceiver : MonoBehaviour
 
         int bw = _periphTex.width;
         int bh = _periphTex.height;
+
+        // Debug logging for alignment tracking
+        // Debug.Log($"[CameraFeed] Blit Fovea: Crop(X:{cropX}, Y:{cropY}, W:{cropW}, H:{cropH}) from FoveaTex({fw}x{fh}) onto Base({bw}x{bh})");
 
         Color32[] basePixels = _periphTex.GetPixels32();
 
@@ -226,7 +259,7 @@ public class CameraFeedReceiver : MonoBehaviour
                 tcpClient.Connect(config.robotIP, config.cameraPort);
                 isConnected = true;
                 attempt = 0;
-                Debug.Log($"[CameraFeed] Connected — mode={(dualPayloadMode ? "dual-payload" : "uniform")}");
+                Debug.Log("[CameraFeed] Connected successfully!");
 
                 using (NetworkStream stream = tcpClient.GetStream())
                 {
@@ -248,7 +281,13 @@ public class CameraFeedReceiver : MonoBehaviour
                         ReadExact(stream, payload, 0, frameLen);
                         long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                        if (dualPayloadMode)
+                        // Auto-detect payload mode dynamically
+                        bool isUniform = payload.Length >= 3 && 
+                                         payload[0] == 0xFF && 
+                                         payload[1] == 0xD8 && 
+                                         payload[2] == 0xFF;
+
+                        if (!isUniform)
                         {
                             if (TryParseDualPayload(payload, nowMs, out DualFrame df))
                             {
@@ -298,7 +337,11 @@ public class CameraFeedReceiver : MonoBehaviour
     {
         result = default;
         const int HeaderSize = 16;
-        if (data.Length < HeaderSize) return false;
+        if (data.Length < HeaderSize)
+        {
+            MetricsLogger.Instance?.Log("malformed_payload_dropped", data.Length, 0f, "");
+            return false;
+        }
 
         int lenPeriph = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
         int lenFovea  = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
@@ -307,16 +350,47 @@ public class CameraFeedReceiver : MonoBehaviour
         int cropW     = (data[12] << 8) | data[13];
         int cropH     = (data[14] << 8) | data[15];
 
-        if (lenPeriph <= 0 || lenFovea <= 0) return false;
-        if (data.Length < HeaderSize + lenPeriph + lenFovea) return false;
+        if (lenPeriph <= 0 || lenFovea < 0)
+        {
+            MetricsLogger.Instance?.Log("malformed_payload_dropped", data.Length, 0f, "");
+            return false;
+        }
 
-        byte[] periph = new byte[lenPeriph];
-        byte[] fovea  = new byte[lenFovea];
-        Array.Copy(data, HeaderSize,             periph, 0, lenPeriph);
-        Array.Copy(data, HeaderSize + lenPeriph, fovea,  0, lenFovea);
+        byte[] periph = null;
+        byte[] fovea = null;
 
-        result = new DualFrame(periph, fovea, cropX, cropY, cropW, cropH, nowMs);
-        return true;
+        try
+        {
+            if (data.Length >= HeaderSize + lenPeriph)
+            {
+                periph = new byte[lenPeriph];
+                Array.Copy(data, HeaderSize, periph, 0, lenPeriph);
+
+                if (data.Length >= HeaderSize + lenPeriph + lenFovea && lenFovea > 0)
+                {
+                    fovea = new byte[lenFovea];
+                    Array.Copy(data, HeaderSize + lenPeriph, fovea,  0, lenFovea);
+                }
+                else if (lenFovea > 0)
+                {
+                    Debug.LogWarning("[CameraFeed] Fovea bytes missing or truncated (simulated packet loss). Rendering periphery only.");
+                }
+            }
+            else
+            {
+                MetricsLogger.Instance?.Log("malformed_payload_dropped", data.Length, 0f, "");
+                return false;
+            }
+
+            result = new DualFrame(periph, fovea, cropX, cropY, cropW, cropH, nowMs);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[CameraFeed] Payload parsing error: {ex.Message}");
+            MetricsLogger.Instance?.Log("malformed_payload_dropped", data.Length, 0f, "");
+            return false;
+        }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

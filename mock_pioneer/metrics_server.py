@@ -24,6 +24,11 @@ class MetricsServer:
         "cmd_received",
         "gaze_uv",
         "quality_mode",
+        "crop_x",
+        "crop_y",
+        "crop_w",
+        "crop_h",
+        "delta_ms",
     ]
 
     def __init__(self, log_dir: str = "logs") -> None:
@@ -46,6 +51,11 @@ class MetricsServer:
         cmd_received: str = "",
         gaze_uv: str = "",
         quality_mode: str = "",
+        crop_x: str = "",
+        crop_y: str = "",
+        crop_w: str = "",
+        crop_h: str = "",
+        delta_ms: str = "",
     ) -> None:
         """
         Append one row to the session CSV.
@@ -58,6 +68,11 @@ class MetricsServer:
             cmd_received: "cmd,turn,speed" string for control events.
             gaze_uv:      "u,v" float string for gaze events.
             quality_mode: Active mode at log time.
+            crop_x:       Crop X coordinate from dual payload header.
+            crop_y:       Crop Y coordinate from dual payload header.
+            crop_w:       Crop Width from dual payload header.
+            crop_h:       Crop Height from dual payload header.
+            delta_ms:     Latency between gaze reception and frame encoding.
         """
         row = {
             "t": f"{time.time():.4f}",
@@ -68,6 +83,11 @@ class MetricsServer:
             "cmd_received": cmd_received,
             "gaze_uv": gaze_uv,
             "quality_mode": quality_mode,
+            "crop_x": crop_x,
+            "crop_y": crop_y,
+            "crop_w": crop_w,
+            "crop_h": crop_h,
+            "delta_ms": delta_ms,
         }
         try:
             self._writer.writerow(row)

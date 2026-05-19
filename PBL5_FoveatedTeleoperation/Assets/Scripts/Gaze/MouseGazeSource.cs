@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// Mouse-cursor gaze proxy for desktop testing without a Tobii or VR headset.
@@ -47,9 +48,10 @@ public class MouseGazeSource : MonoBehaviour
     {
         if (!useMouseProxy) return;
 
+        Vector2 mousePos = Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
         // Compute raw mouse UV
-        float rawU = Mathf.Clamp01(Input.mousePosition.x / Screen.width);
-        float rawV = Mathf.Clamp01(Input.mousePosition.y / Screen.height);
+        float rawU = Mathf.Clamp01(mousePos.x / Screen.width);
+        float rawV = Mathf.Clamp01(mousePos.y / Screen.height);
         Vector2 rawUV = new Vector2(rawU, rawV);
 
         // Optional smoothing

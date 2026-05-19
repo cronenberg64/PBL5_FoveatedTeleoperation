@@ -22,6 +22,7 @@ import struct
 import threading
 import time
 from typing import Optional
+import math
 
 import cv2
 import numpy as np
@@ -38,6 +39,25 @@ _GAZE_STALE_TIMEOUT_S: float = 0.5   # fall back to centre after 500 ms
 
 _metrics: Optional[MetricsServer] = None
 
+def _generate_synthetic_frame() -> np.ndarray:
+    """Generate a 640x480 synthetic frame with a moving circle and grid pattern."""
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    # Draw a grid
+    for x in range(0, 640, 80):
+        cv2.line(frame, (x, 0), (x, 480), (40, 40, 40), 1)
+    for y in range(0, 480, 80):
+        cv2.line(frame, (0, y), (640, y), (40, 40, 40), 1)
+    # Bouncing ball based on current time
+    t = time.time()
+    cx = int(320 + 200 * math.sin(t * 2))
+    cy = int(240 + 150 * math.cos(t * 1.5))
+    # Green ball
+    cv2.circle(frame, (cx, cy), 40, (0, 255, 0), -1)
+    
+    cv2.putText(frame, "SYNTHETIC FEED (Webcam Offline)", (10, 450),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
+    return frame
+
 # Set by camera_thread at startup; read by control/gaze threads for CSV logging
 _current_mode: str = "uniform"
 _current_quality: int = 20
@@ -46,13 +66,13 @@ _current_quality: int = 20
 _preview_queue = queue.Queue(maxsize=1)
 
 
-def _get_gaze() -> tuple[float, float]:
-    """Return the latest non-stale gaze UV, or (0.5, 0.5) if stale / never set."""
+def _get_gaze() -> tuple[float, float, float]:
+    """Return the latest non-stale gaze UV and its timestamp, or (0.5, 0.5, 0.0) if stale / never set."""
     with _gaze_lock:
         age = time.time() - _gaze_timestamp
         if _gaze_timestamp == 0.0 or age > _GAZE_STALE_TIMEOUT_S:
-            return (0.5, 0.5)
-        return _latest_gaze
+            return (0.5, 0.5, 0.0)
+        return (_latest_gaze[0], _latest_gaze[1], _gaze_timestamp)
 
 
 def _set_gaze(u: float, v: float) -> None:
@@ -229,16 +249,16 @@ def camera_thread(
 
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("[Camera] ERROR: Cannot open webcam (cv2.VideoCapture(0)). "
-              "Check webcam permissions and connection.")
-        return
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    print(f"[Camera] Webcam opened — mode={mode}"
-          + (f", quality={quality}" if mode == "uniform"
-             else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
-                  f", fovea_size={fovea_size}"))
+        print("[Camera] WARNING: Cannot open webcam (cv2.VideoCapture(0)). "
+              "Falling back to synthetic frame generator.")
+        cap = None
+    else:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        print(f"[Camera] Webcam opened — mode={mode}"
+              + (f", quality={quality}" if mode == "uniform"
+                 else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
+                      f", fovea_size={fovea_size}"))
 
     server_sock = _make_server_socket(1235)
     server_sock.settimeout(1.0)
@@ -251,7 +271,11 @@ def camera_thread(
             except socket.timeout:
                 # If no client, but show is on, we still want to see the camera
                 if show:
-                    ok, frame = cap.read()
+                    if cap is not None:
+                        ok, frame = cap.read()
+                    else:
+                        ok = True
+                        frame = _generate_synthetic_frame()
                     if ok:
                         # Push to queue for main thread to show
                         try:
@@ -268,18 +292,22 @@ def camera_thread(
                 while not stop_event.is_set():
                     t0 = time.time()
 
-                    ok, frame = cap.read()
-                    if not ok:
-                        print("[Camera] Webcam read failed — skipping frame.")
-                        time.sleep(frame_interval)
-                        continue
+                    if cap is not None:
+                        ok, frame = cap.read()
+                        if not ok:
+                            print("[Camera] Webcam read failed — skipping frame.")
+                            time.sleep(frame_interval)
+                            continue
+                    else:
+                        ok = True
+                        frame = _generate_synthetic_frame()
 
-                    gaze = _get_gaze()
+                    gaze_u, gaze_v, gaze_ts = _get_gaze()
 
                     if mode == "gaze":
                         payload, stats = encode_dual_payload(
                             frame,
-                            gaze,
+                            (gaze_u, gaze_v),
                             periph_quality=periph_quality,
                             fovea_quality=fovea_quality,
                             fovea_size=fovea_size,
@@ -299,13 +327,19 @@ def camera_thread(
                                 pass
                         
                         if _metrics:
+                            delta_ms = (t0 - gaze_ts) * 1000 if gaze_ts > 0 else 0.0
                             _metrics.log(
                                 "frame_sent",
                                 bytes_total=len(payload),
                                 bytes_periph=stats["periph_bytes"],
                                 bytes_fovea=stats["fovea_bytes"],
-                                gaze_uv=f"{gaze[0]:.3f},{gaze[1]:.3f}",
+                                gaze_uv=f"{gaze_u:.3f},{gaze_v:.3f}",
                                 quality_mode=mode,
+                                crop_x=str(stats["crop_x"]),
+                                crop_y=str(stats["crop_y"]),
+                                crop_w=str(stats["crop_w"]),
+                                crop_h=str(stats["crop_h"]),
+                                delta_ms=f"{delta_ms:.1f}",
                             )
                     else:
                         payload = encode_uniform(frame, quality)
@@ -319,7 +353,7 @@ def camera_thread(
                             _metrics.log(
                                 "frame_sent",
                                 bytes_total=len(payload),
-                                gaze_uv=f"{gaze[0]:.3f},{gaze[1]:.3f}",
+                                gaze_uv=f"{gaze_u:.3f},{gaze_v:.3f}",
                                 quality_mode=f"{mode}-{quality}",
                             )
 

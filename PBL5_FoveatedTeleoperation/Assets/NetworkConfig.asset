@@ -9,7 +9,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f27896bd77ba50f4da8151f603a19a50, type: 3}
+  m_Script: {fileID: 11500000, guid: ee60d8e1241fb2a478daf25980a80ce6, type: 3}
   m_Name: NetworkConfig
   m_EditorClassIdentifier: Assembly-CSharp::NetworkConfig
   robotIP: 127.0.0.1
