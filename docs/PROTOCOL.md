@@ -144,3 +144,17 @@ The server's `_get_gaze()` returns `(0.5, 0.5)` if:
 All three services use `SO_REUSEADDR` and accept exactly one client per port.
 On client disconnect the server loops back to `accept()` without crashing.
 Unity clients implement exponential back-off reconnection (1 s → 2 s → 4 s → … → 16 s max).
+
+---
+
+## Phase 3 — Bandwidth calibration (LOCKED)
+
+Results from the matched-bandwidth sweep (locked on May 22, 2026):
+
+- **Baseline:** Uniform Q50 — avg_bytes = 13154.24 bytes/frame
+- **Matched foveated condition:** periph_q=15, fovea_q=85 — avg_bytes = 13302.55 bytes/frame (+1.13% from baseline)
+- **Note:** One anomalous data point at (periph_q=25, fovea_q=85) was observed and flagged for a targeted re-run (investigation required before final publication).
+
+These values were produced by the `bench_bandwidth.py` sweep and recorded in `mock_pioneer/bench_results.csv`.
+
+No further Phase 3 sweeps should be run until Phase 4 design is approved.

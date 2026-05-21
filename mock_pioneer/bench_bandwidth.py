@@ -74,13 +74,20 @@ def drain_camera_stream(stop_event):
 
 def run_server_and_get_avg_bytes(mode: str, quality_args: list) -> float:
     """Run server for DURATION_S, kill it, and parse the resulting CSV."""
-    for old_csv in glob.glob(os.path.join(LOG_DIR, "*.csv")):
-        try:
-            os.remove(old_csv)
-        except OSError:
-            pass
+    # Prefer the local virtualenv python if it exists so server subprocess
+    # imports match the harness environment (e.g., `cv2` in .venv).
+    # Resolve .venv relative to this script's directory (robust to cwd)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    venv_py = os.path.join(script_dir, ".venv", "Scripts", "python.exe")
+    python_exec = venv_py if os.path.exists(venv_py) else sys.executable
 
-    cmd = [sys.executable, "-u", "server.py", "--mode", mode] + quality_args
+    # Use a per-iteration log directory so CSVs don't collide between runs
+    iteration_start = time.time()
+    run_log_dir = os.path.join(LOG_DIR, f"run_{int(iteration_start)}")
+    os.makedirs(run_log_dir, exist_ok=True)
+
+    cmd = [python_exec, "-u", "server.py", "--mode", mode, "--log-dir", run_log_dir] + quality_args
+    print(f"    [Bench] launching server with interpreter {python_exec}: {' '.join(cmd)}")
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     
     def print_server_output():
@@ -88,11 +95,13 @@ def run_server_and_get_avg_bytes(mode: str, quality_args: list) -> float:
             print(f"    [Server Out] {line.strip()}")
             
     threading.Thread(target=print_server_output, daemon=True).start()
-    
+    # Allow server a short warm-up to initialize and bind sockets
+    time.sleep(2.5)
+
     stop_event = threading.Event()
     gaze_thread = threading.Thread(target=send_gaze_updates, args=(stop_event,))
     camera_thread = threading.Thread(target=drain_camera_stream, args=(stop_event,))
-    
+
     gaze_thread.start()
     camera_thread.start()
 
@@ -104,11 +113,11 @@ def run_server_and_get_avg_bytes(mode: str, quality_args: list) -> float:
     gaze_thread.join()
     camera_thread.join()
 
-    csv_files = glob.glob(os.path.join(LOG_DIR, "*.csv"))
+    csv_files = glob.glob(os.path.join(run_log_dir, "*.csv"))
     if not csv_files:
-        print("[Bench] Error: No CSV generated!")
-        return 0.0
-    
+        print(f"[Bench] Error: No CSV generated in {run_log_dir}!")
+        return 0.0, None
+
     csv_file = sorted(csv_files)[-1]
     total_bytes = 0
     frame_count = 0
@@ -120,8 +129,8 @@ def run_server_and_get_avg_bytes(mode: str, quality_args: list) -> float:
                 frame_count += 1
                 
     if frame_count == 0:
-        return 0.0
-    return total_bytes / frame_count
+        return 0.0, csv_file
+    return total_bytes / frame_count, csv_file
 
 def main():
     if not os.path.exists(LOG_DIR):
@@ -132,8 +141,8 @@ def main():
     print("This will take approximately 21 minutes.\n")
     
     print("--- Measuring Uniform Baseline ---")
-    baseline_bytes = run_server_and_get_avg_bytes("uniform", ["--quality", str(BASELINE_Q)])
-    print(f"Baseline Uniform Q{BASELINE_Q}: {baseline_bytes:.1f} bytes/frame\n")
+    baseline_bytes, baseline_csv = run_server_and_get_avg_bytes("uniform", ["--quality", str(BASELINE_Q)])
+    print(f"Baseline Uniform Q{BASELINE_Q}: {baseline_bytes:.1f} bytes/frame (from {baseline_csv})\n")
 
     if baseline_bytes == 0:
         print("Failed to get baseline. Aborting.")
@@ -148,14 +157,15 @@ def main():
             current_run += 1
             print(f"Run {current_run}/{total_runs}: periph={pq}, fovea={fq} ... ", end="", flush=True)
             args = ["--periph-quality", str(pq), "--fovea-quality", str(fq)]
-            avg_bytes = run_server_and_get_avg_bytes("gaze", args)
-            
+            print(f"[Sweep] periph_q={pq}, fovea_q={fq}")
+            avg_bytes, csv_file = run_server_and_get_avg_bytes("gaze", args)
+
             if avg_bytes == 0:
-                 print("FAILED")
-                 continue
-                 
+                print("FAILED")
+                continue
+
             delta_pct = ((avg_bytes - baseline_bytes) / baseline_bytes) * 100.0
-            print(f"{avg_bytes:.1f} bytes ({delta_pct:+.1f}%)")
+            print(f"{avg_bytes:.1f} bytes ({delta_pct:+.1f}%)  (csv: {csv_file})")
             
             results.append({
                 "periph_q": pq,

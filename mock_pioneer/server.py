@@ -455,6 +455,9 @@ def main() -> None:
     
     _metrics.log("server_start", quality_mode=mode_label)
 
+    # Debug: print explicit encoding qualities at startup for visibility
+    print(f"[Server] Encoding peripheral at quality {args.periph_quality}, foveal at quality {args.fovea_quality}")
+
     stop_event = threading.Event()
 
     threads = [
