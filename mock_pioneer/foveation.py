@@ -124,3 +124,35 @@ def encode_dual_payload(
         "crop_h": crop_h,
     }
     return payload, stats
+
+
+def encode_peripheral_only(frame: np.ndarray, quality: int) -> bytes:
+    """
+    Encode the frame for peripheral-only mode.
+    Sends only the periphery JPEG (full frame) with fovea length set to 0.
+
+    Args:
+        frame:   BGR image array (H, W, 3).
+        quality: JPEG quality factor 1–100.
+
+    Returns:
+        Dual-payload formatted bytes with 0 foveal length.
+    """
+    pq = int(np.clip(quality, 1, 100))
+    ok, p_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, pq])
+    if not ok:
+        raise RuntimeError("cv2.imencode failed for peripheral-only periphery")
+    periph_bytes = p_buf.tobytes()
+
+    # Pack 16-byte dual-payload header with 0 fovea size
+    header = struct.pack(
+        ">IIHHHH",
+        len(periph_bytes),
+        0,  # len_fovea = 0
+        0,  # crop_x = 0
+        0,  # crop_y = 0
+        0,  # crop_w = 0
+        0,  # crop_h = 0
+    )
+    return header + periph_bytes
+

@@ -53,8 +53,9 @@ public class GazeDebugDot : MonoBehaviour
 
         dotRect = dotObject.AddComponent<RectTransform>();
         dotRect.sizeDelta = new Vector2(dotSize, dotSize);
-        dotRect.anchorMin = Vector2.zero;
-        dotRect.anchorMax = Vector2.zero;
+        Vector2 pivot = feedPlane != null ? feedPlane.pivot : new Vector2(0.5f, 0.5f);
+        dotRect.anchorMin = pivot;
+        dotRect.anchorMax = pivot;
         dotRect.pivot = new Vector2(0.5f, 0.5f);
 
         dotImage = dotObject.AddComponent<Image>();

@@ -31,7 +31,21 @@ public class TrialMetricsLogger : MonoBehaviour
     // Public properties for external components and HUD
     public int TrialId => trialId;
     public string CurrentScenario => isTrialActive ? activeScenario : (scenarioSelector != null ? scenarioSelector.ActiveScenario.ToString() : "None");
-    public string CurrentCondition => isTrialActive ? activeCondition : currentCondition;
+    public string CurrentCondition
+    {
+        get
+        {
+            if (isTrialActive)
+            {
+                return activeCondition;
+            }
+            else if (ConditionController.Instance != null)
+            {
+                return ConditionController.Instance.ActiveCondition.ToString();
+            }
+            return currentCondition;
+        }
+    }
     public float ElapsedTime => isTrialActive ? (Time.time - trialStartTime) : lastCompletionTime;
     public int CollisionCount => collisionCount;
     public bool IsTrialActive => isTrialActive;
@@ -69,7 +83,7 @@ public class TrialMetricsLogger : MonoBehaviour
         if (keyboard.f5Key.wasPressedThisFrame)
         {
             string scenario = scenarioSelector != null ? scenarioSelector.ActiveScenario.ToString() : "Unknown";
-            StartTrial(scenario, currentCondition);
+            StartTrial(scenario, CurrentCondition);
         }
         if (keyboard.f6Key.wasPressedThisFrame)
         {
@@ -87,6 +101,20 @@ public class TrialMetricsLogger : MonoBehaviour
 
     public void StartTrial(string scenario, string condition)
     {
+        // SetCondition before starting the timer, locking it
+        if (ConditionController.Instance != null)
+        {
+            if (System.Enum.TryParse(condition, out ConditionController.Condition parsedCond))
+            {
+                ConditionController.Instance.SetCondition(parsedCond);
+            }
+            else
+            {
+                ConditionController.Instance.SetCondition(ConditionController.Instance.ActiveCondition);
+            }
+            condition = ConditionController.Instance.ActiveCondition.ToString();
+        }
+
         if (isTrialActive)
         {
             Debug.LogWarning("[TrialMetricsLogger] StartTrial called but a trial is already active. Restarting timer.");

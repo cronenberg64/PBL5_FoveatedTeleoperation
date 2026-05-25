@@ -130,6 +130,24 @@ public static class SimulatedDrivingSceneBuilder
         mover.range = 4f;
         mover.startDelay = 5f;
 
+        // Find NetworkConfig
+        NetworkConfig netConfig = null;
+        string[] configGuids = AssetDatabase.FindAssets("t:NetworkConfig");
+        if (configGuids.Length > 0)
+        {
+            netConfig = AssetDatabase.LoadAssetAtPath<NetworkConfig>(AssetDatabase.GUIDToAssetPath(configGuids[0]));
+        }
+        else
+        {
+            Debug.LogError("[SceneBuilder] NetworkConfig asset not found! Frame streaming may not resolve the correct port.");
+        }
+
+        // Attach SceneFrameStreamer to Robot
+        SceneFrameStreamer streamer = robot.AddComponent<SceneFrameStreamer>();
+        streamer.config = netConfig;
+        streamer.targetRenderTexture = rt;
+        streamer.enableStreaming = true;
+
         // Wire Selector GameObjects
         selector.scenarioCorridor = scenarioCorridor;
         selector.scenarioDoorway = scenarioDoorway;
@@ -169,12 +187,60 @@ public static class SimulatedDrivingSceneBuilder
         GameObject rawImageGO = new GameObject("FeedImage");
         rawImageGO.transform.SetParent(canvasGO.transform, false);
         RawImage rawImage = rawImageGO.AddComponent<RawImage>();
-        rawImage.texture = rt;
+        rawImage.texture = rt; // fallback texture before feed starts
         
         RectTransform rawImgRt = rawImage.GetComponent<RectTransform>();
         rawImgRt.anchorMin = Vector2.zero;
         rawImgRt.anchorMax = Vector2.one;
         rawImgRt.sizeDelta = Vector2.zero;
+
+        // Attach CameraFeedReceiver to the FeedImage
+        CameraFeedReceiver receiver = rawImageGO.AddComponent<CameraFeedReceiver>();
+        SerializedObject receiverSO = new SerializedObject(receiver);
+        receiverSO.FindProperty("feedDisplay").objectReferenceValue = rawImage;
+        receiverSO.FindProperty("config").objectReferenceValue = netConfig;
+        receiverSO.FindProperty("dualPayloadMode").boolValue = true;
+        receiverSO.ApplyModifiedProperties();
+
+        // Setup Gaze Manager
+        GameObject gazeGO = new GameObject("GazeManager");
+        GazeProvider gazeProvider = gazeGO.AddComponent<GazeProvider>();
+        MouseGazeSource mouseSource = gazeGO.AddComponent<MouseGazeSource>();
+        GazeUploader gazeUploader = gazeGO.AddComponent<GazeUploader>();
+
+        // Wire GazeProvider
+        SerializedObject gpSO = new SerializedObject(gazeProvider);
+        gpSO.FindProperty("vrCamera").objectReferenceValue = hudCam;
+        SerializedProperty feedPlanesProp = gpSO.FindProperty("feedPlanes");
+        feedPlanesProp.arraySize = 1;
+        feedPlanesProp.GetArrayElementAtIndex(0).objectReferenceValue = rawImage.rectTransform;
+        gpSO.ApplyModifiedProperties();
+
+        // Wire MouseGazeSource
+        SerializedObject msSO = new SerializedObject(mouseSource);
+        msSO.FindProperty("useMouseProxy").boolValue = true;
+        msSO.ApplyModifiedProperties();
+
+        // Wire GazeUploader
+        SerializedObject guSO = new SerializedObject(gazeUploader);
+        guSO.FindProperty("config").objectReferenceValue = netConfig;
+        guSO.FindProperty("gazeProvider").objectReferenceValue = gazeProvider;
+        guSO.ApplyModifiedProperties();
+
+        // Attach and wire ConditionController
+        ConditionController condController = gazeGO.AddComponent<ConditionController>();
+        SerializedObject condSO = new SerializedObject(condController);
+        condSO.FindProperty("config").objectReferenceValue = netConfig;
+        condSO.ApplyModifiedProperties();
+
+        // Attach GazeDebugDot to FeedImage to visualize mouse/eye gaze point
+        GazeDebugDot debugDot = rawImageGO.AddComponent<GazeDebugDot>();
+        SerializedObject dotSO = new SerializedObject(debugDot);
+        dotSO.FindProperty("gazeProvider").objectReferenceValue = gazeProvider;
+        dotSO.FindProperty("feedPlane").objectReferenceValue = rawImage.rectTransform;
+        dotSO.FindProperty("dotColor").colorValue = Color.green;
+        dotSO.FindProperty("dotSize").floatValue = 16f;
+        dotSO.ApplyModifiedProperties();
 
         AspectRatioFitter fitter = rawImageGO.AddComponent<AspectRatioFitter>();
         fitter.aspectRatio = 16f / 9f;
