@@ -20,6 +20,7 @@ public static class SimulatedDrivingSceneBuilder
         RegisterTag("TrialStart");
         RegisterTag("TrialEnd");
         RegisterTag("Player");
+        RegisterTag("Wall");
 
         // 3. Create a new empty scene
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -86,6 +87,9 @@ public static class SimulatedDrivingSceneBuilder
         // 9. Setup WorldRoot and Scenarios
         GameObject worldRoot = new GameObject("WorldRoot");
         ScenarioSelector selector = worldRoot.AddComponent<ScenarioSelector>();
+        TrialMetricsLogger metricsLogger = worldRoot.AddComponent<TrialMetricsLogger>();
+        metricsLogger.scenarioSelector = selector;
+        metricsLogger.robotController = rc;
 
         // Scenario 1: Corridor
         GameObject scenarioCorridor = new GameObject("Scenario_Corridor");
@@ -116,6 +120,7 @@ public static class SimulatedDrivingSceneBuilder
 
         GameObject obstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
         obstacle.name = "ObstacleCube";
+        obstacle.tag = "Wall";
         obstacle.transform.SetParent(scenarioObstacle.transform);
         obstacle.transform.localPosition = new Vector3(0f, 0.5f, 10f); // 1m cube
         obstacle.transform.localScale = new Vector3(1f, 1f, 1f);
@@ -137,6 +142,28 @@ public static class SimulatedDrivingSceneBuilder
         canvasComp.renderMode = RenderMode.ScreenSpaceOverlay;
         canvasGO.AddComponent<CanvasScaler>();
         canvasGO.AddComponent<GraphicRaycaster>();
+
+        // Setup HUD Camera (to prevent "No cameras rendering" warning on Display 1)
+        GameObject hudCamGO = new GameObject("HUDCamera");
+        Camera hudCam = hudCamGO.AddComponent<Camera>();
+        hudCam.clearFlags = CameraClearFlags.SolidColor;
+        hudCam.backgroundColor = Color.black;
+        hudCam.cullingMask = 0; // Don't render anything in 3D
+        hudCam.depth = -10; // Render behind UI overlay
+
+        // Red Flash Overlay for Collisions
+        GameObject flashGO = new GameObject("CollisionFlash");
+        flashGO.transform.SetParent(canvasGO.transform, false);
+        Image flashImage = flashGO.AddComponent<Image>();
+        flashImage.color = new Color(1f, 0f, 0f, 0f); // transparent initially
+        RectTransform flashRt = flashImage.GetComponent<RectTransform>();
+        flashRt.anchorMin = Vector2.zero;
+        flashRt.anchorMax = Vector2.one;
+        flashRt.sizeDelta = Vector2.zero;
+
+        // Attach CollisionReporter to Robot and link flash image
+        CollisionReporter reporter = robot.AddComponent<CollisionReporter>();
+        reporter.flashImage = flashImage;
 
         // Full screen RawImage
         GameObject rawImageGO = new GameObject("FeedImage");
@@ -195,8 +222,6 @@ public static class SimulatedDrivingSceneBuilder
         hudSO.FindProperty("trialText").objectReferenceValue = trialText;
         hudSO.FindProperty("timeText").objectReferenceValue = timeText;
         hudSO.FindProperty("collisionText").objectReferenceValue = collisionText;
-        hudSO.FindProperty("robotController").objectReferenceValue = rc;
-        hudSO.FindProperty("scenarioSelector").objectReferenceValue = selector;
         hudSO.ApplyModifiedProperties();
 
         // 11. Save Scene
@@ -312,6 +337,7 @@ public static class SimulatedDrivingSceneBuilder
     {
         GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
         wall.name = name;
+        wall.tag = "Wall";
         wall.transform.SetParent(parent.transform);
         wall.transform.localPosition = pos;
         wall.transform.localScale = scale;
@@ -334,6 +360,16 @@ public static class SimulatedDrivingSceneBuilder
         {
             col.isTrigger = true;
         }
+
+        if (tag == "TrialStart" || name == "TrialStart")
+        {
+            trigger.AddComponent<TrialStartTrigger>();
+        }
+        else if (tag == "TrialEnd" || name == "TrialEnd")
+        {
+            trigger.AddComponent<TrialEndTrigger>();
+        }
+
         return trigger;
     }
 

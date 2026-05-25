@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class ScenarioSelector : MonoBehaviour
 {
@@ -32,16 +33,19 @@ public class ScenarioSelector : MonoBehaviour
 
     private void Update()
     {
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return;
+
         // Hotkeys for runtime switching
-        if (Input.GetKeyDown(KeyCode.Alpha1))
+        if (keyboard.digit1Key.wasPressedThisFrame)
         {
             ActivateScenario(DrivingScenario.Corridor);
         }
-        else if (Input.GetKeyDown(KeyCode.Alpha2))
+        else if (keyboard.digit2Key.wasPressedThisFrame)
         {
             ActivateScenario(DrivingScenario.Doorway);
         }
-        else if (Input.GetKeyDown(KeyCode.Alpha3))
+        else if (keyboard.digit3Key.wasPressedThisFrame)
         {
             ActivateScenario(DrivingScenario.Obstacle);
         }

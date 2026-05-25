@@ -10,13 +10,6 @@ public class DrivingHUD : MonoBehaviour
     [SerializeField] private TextMeshProUGUI timeText;
     [SerializeField] private TextMeshProUGUI collisionText;
 
-    [Header("Data Sources")]
-    [SerializeField] private RobotController robotController;
-    [SerializeField] private ScenarioSelector scenarioSelector;
-
-    [Header("Settings")]
-    [SerializeField] private string conditionName = "Manual WASD";
-
     private void Update()
     {
         UpdateHUD();
@@ -24,38 +17,33 @@ public class DrivingHUD : MonoBehaviour
 
     public void UpdateHUD()
     {
-        if (scenarioText != null && scenarioSelector != null)
+        if (TrialMetricsLogger.Instance != null)
         {
-            scenarioText.text = $"Scenario: {scenarioSelector.ActiveScenario}";
-        }
+            var logger = TrialMetricsLogger.Instance;
 
-        if (conditionText != null)
-        {
-            conditionText.text = $"Condition: {conditionName}";
-        }
+            if (scenarioText != null)
+            {
+                scenarioText.text = $"Scenario: {logger.CurrentScenario}";
+            }
 
-        if (robotController != null)
-        {
+            if (conditionText != null)
+            {
+                conditionText.text = $"Condition: {logger.CurrentCondition}";
+            }
+
             if (trialText != null)
             {
-                trialText.text = $"Trial: #{robotController.trialNumber}";
+                trialText.text = $"Trial: {logger.TrialId}";
             }
 
             if (timeText != null)
             {
-                if (robotController.isTrialActive)
-                {
-                    timeText.text = $"Time: {robotController.elapsedTime:F2}s";
-                }
-                else
-                {
-                    timeText.text = $"Time: {robotController.elapsedTime:F2}s (Ready)";
-                }
+                timeText.text = $"Time: {logger.ElapsedTime:F1}s";
             }
 
             if (collisionText != null)
             {
-                collisionText.text = $"Collisions: {robotController.collisionCount}";
+                collisionText.text = $"Collisions: {logger.CollisionCount}";
             }
         }
     }

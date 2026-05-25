@@ -7,6 +7,7 @@ TagManager:
   - TrialStart
   - TrialEnd
   - Player
+  - Wall
   layers:
   - Default
   - TransparentFX
