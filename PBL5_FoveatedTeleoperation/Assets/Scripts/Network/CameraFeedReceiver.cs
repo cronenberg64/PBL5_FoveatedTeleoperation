@@ -53,6 +53,17 @@ public class CameraFeedReceiver : MonoBehaviour
     [SerializeField] private bool isConnected;
     [SerializeField] private int framesReceived;
 
+    // Telemetry fields
+    private float _bandwidthBytesPerSec = 0f;
+    private float _lastDecodeMs = 0f;
+    private float _bytesReceivedAccumulator = 0f;
+    private float _bandwidthTimer = 0f;
+
+    // Public properties
+    public bool IsConnected => isConnected;
+    public float BandwidthBytesPerSec => _bandwidthBytesPerSec;
+    public float LatencyMs => _lastDecodeMs;
+
     private TcpClient tcpClient;
     private Thread receiveThread;
     private CancellationTokenSource cts;
@@ -125,6 +136,7 @@ public class CameraFeedReceiver : MonoBehaviour
         {
             latestUniform = uf;
             hasUniform = true;
+            _bytesReceivedAccumulator += uf.JpegData.Length + 4f; // Accumulate bytes (including length prefix)
         }
 
         bool hasDual = false;
@@ -133,6 +145,7 @@ public class CameraFeedReceiver : MonoBehaviour
         {
             latestDual = df;
             hasDual = true;
+            _bytesReceivedAccumulator += df.TotalBytes + 4f; // Accumulate bytes (including length prefix)
         }
 
         // Apply the newer of the two frames based on the timestamp
@@ -155,6 +168,15 @@ public class CameraFeedReceiver : MonoBehaviour
         {
             ApplyUniformFrame(latestUniform);
         }
+
+        // Bandwidth calculation over 1s intervals
+        _bandwidthTimer += Time.deltaTime;
+        if (_bandwidthTimer >= 1.0f)
+        {
+            _bandwidthBytesPerSec = _bytesReceivedAccumulator / _bandwidthTimer;
+            _bytesReceivedAccumulator = 0f;
+            _bandwidthTimer = 0f;
+        }
     }
 
     private void OnDestroy()  => Shutdown();
@@ -170,6 +192,7 @@ public class CameraFeedReceiver : MonoBehaviour
             feedDisplay.texture = _periphTex;
             framesReceived++;
             double decodeMs = (Stopwatch.GetTimestamp() - decodeStart) * 1000.0 / Stopwatch.Frequency;
+            _lastDecodeMs = (float)decodeMs;
             MetricsLogger.Instance?.Log("frame_received", latest.JpegData.Length, (float)decodeMs, "uniform");
         }
     }
@@ -200,6 +223,7 @@ public class CameraFeedReceiver : MonoBehaviour
         framesReceived++;
 
         double decodeMs = (Stopwatch.GetTimestamp() - decodeStart) * 1000.0 / Stopwatch.Frequency;
+        _lastDecodeMs = (float)decodeMs;
         MetricsLogger.Instance?.Log("frame_received", latest.TotalBytes, (float)decodeMs, "gaze");
     }
 

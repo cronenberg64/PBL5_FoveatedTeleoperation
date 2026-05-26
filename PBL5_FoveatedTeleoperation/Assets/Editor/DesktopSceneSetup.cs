@@ -3,6 +3,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using TMPro;
 
 public class DesktopSceneSetup
 {
@@ -35,8 +36,8 @@ public class DesktopSceneSetup
         rt.sizeDelta = Vector2.zero;
         FoveatedFeedController ffc = rawImageGO.AddComponent<FoveatedFeedController>();
         
-        // Assign Material FoveatedFeed
-        string[] matGuids = AssetDatabase.FindAssets("FoveatedFeed t:Material");
+        // Assign Material FoveatedMaterial
+        string[] matGuids = AssetDatabase.FindAssets("FoveatedMaterial t:Material");
         if (matGuids.Length > 0)
         {
             Material foveatedMat = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(matGuids[0]));
@@ -44,7 +45,7 @@ public class DesktopSceneSetup
         }
         else
         {
-            Debug.LogWarning("FoveatedFeed material not found. You need to assign the material to the FeedImage manually.");
+            Debug.LogWarning("FoveatedMaterial not found. You need to assign the material to the FeedImage manually.");
         }
         
         // Find Config
@@ -114,8 +115,81 @@ public class DesktopSceneSetup
         tcSO.FindProperty("inputActions").objectReferenceValue = actions;
         tcSO.ApplyModifiedProperties();
 
-        // 6. Save Scene
+        // AspectRatioFitter (similar to SimulatedDriving for correct aspect ratio handling)
+        AspectRatioFitter fitter = rawImageGO.AddComponent<AspectRatioFitter>();
+        fitter.aspectRatio = 16f / 9f;
+        fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+
+        // 6. HUD Panel Overlay
+        GameObject hudPanelGO = new GameObject("HUDPanel");
+        hudPanelGO.transform.SetParent(canvasGO.transform, false);
+        Image panelImage = hudPanelGO.AddComponent<Image>();
+        panelImage.color = new Color(0.1f, 0.1f, 0.1f, 0.75f); // 75% opacity dark panel
+
+        RectTransform panelRt = hudPanelGO.GetComponent<RectTransform>();
+        panelRt.anchorMin = new Vector2(0f, 1f);
+        panelRt.anchorMax = new Vector2(0f, 1f);
+        panelRt.pivot = new Vector2(0f, 1f);
+        panelRt.anchoredPosition = new Vector2(20f, -20f);
+        panelRt.sizeDelta = new Vector2(400f, 160f);
+
+        // Header and separator line
+        CreateText(hudPanelGO, "Header", "TELEOPERATION STATS", -15f, 12, isBold: true);
+        
+        GameObject lineGO = new GameObject("SeparatorLine");
+        lineGO.transform.SetParent(hudPanelGO.transform, false);
+        Image lineImg = lineGO.AddComponent<Image>();
+        lineImg.color = new Color(1f, 1f, 1f, 0.2f);
+        RectTransform lineRt = lineImg.GetComponent<RectTransform>();
+        lineRt.anchorMin = new Vector2(0f, 1f);
+        lineRt.anchorMax = new Vector2(1f, 1f);
+        lineRt.pivot = new Vector2(0f, 1f);
+        lineRt.anchoredPosition = new Vector2(15f, -35f);
+        lineRt.sizeDelta = new Vector2(-30f, 1f);
+
+        // Text elements
+        TextMeshProUGUI statusText = CreateText(hudPanelGO, "StatusText", "Status: Disconnected", -45f, 14);
+        TextMeshProUGUI gazeModeText = CreateText(hudPanelGO, "GazeModeText", "Gaze Mode: Mouse", -70f, 14);
+        TextMeshProUGUI bandwidthText = CreateText(hudPanelGO, "BandwidthText", "Bandwidth: 0 B/s", -95f, 14);
+        TextMeshProUGUI latencyText = CreateText(hudPanelGO, "LatencyText", "Latency: 0.0 ms", -120f, 14);
+
+        // Bind HUD
+        DesktopHUD hud = canvasGO.AddComponent<DesktopHUD>();
+        SerializedObject hudSO = new SerializedObject(hud);
+        hudSO.FindProperty("statusText").objectReferenceValue = statusText;
+        hudSO.FindProperty("gazeModeText").objectReferenceValue = gazeModeText;
+        hudSO.FindProperty("bandwidthText").objectReferenceValue = bandwidthText;
+        hudSO.FindProperty("latencyText").objectReferenceValue = latencyText;
+        hudSO.FindProperty("feedReceiver").objectReferenceValue = receiver;
+        hudSO.FindProperty("gazeProvider").objectReferenceValue = gazeProvider;
+        hudSO.FindProperty("config").objectReferenceValue = config;
+        hudSO.ApplyModifiedProperties();
+
+        // 7. Save Scene
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/DesktopFoveated.unity");
         Debug.Log("Desktop Scene setup complete! Saved to Assets/Scenes/DesktopFoveated.unity");
+    }
+
+    private static TextMeshProUGUI CreateText(GameObject parent, string name, string defaultText, float yOffset, int fontSize, bool isBold = false)
+    {
+        GameObject go = new GameObject(name);
+        go.transform.SetParent(parent.transform, false);
+        TextMeshProUGUI tmp = go.AddComponent<TextMeshProUGUI>();
+        tmp.text = defaultText;
+        tmp.fontSize = fontSize;
+        tmp.color = Color.white;
+        if (isBold)
+        {
+            tmp.fontStyle = FontStyles.Bold;
+        }
+        
+        RectTransform rt = tmp.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        rt.anchoredPosition = new Vector2(15f, yOffset);
+        rt.sizeDelta = new Vector2(-30f, 30f);
+        
+        return tmp;
     }
 }
