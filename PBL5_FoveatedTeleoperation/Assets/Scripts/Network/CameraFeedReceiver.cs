@@ -51,7 +51,9 @@ public class CameraFeedReceiver : MonoBehaviour
 
     [Header("Status (Read-Only)")]
     [SerializeField] private bool isConnected;
+    public bool IsConnected => isConnected;
     [SerializeField] private int framesReceived;
+    public int FramesReceived => framesReceived;
 
     private TcpClient tcpClient;
     private Thread receiveThread;

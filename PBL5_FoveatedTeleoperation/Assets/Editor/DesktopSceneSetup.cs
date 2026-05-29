@@ -114,7 +114,31 @@ public class DesktopSceneSetup
         tcSO.FindProperty("inputActions").objectReferenceValue = actions;
         tcSO.ApplyModifiedProperties();
 
-        // 6. Save Scene
+        // 6. HUD Overlay
+        GameObject hudGO = new GameObject("HUDText");
+        hudGO.transform.SetParent(canvasGO.transform, false);
+        Text hudText = hudGO.AddComponent<Text>();
+        hudText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        hudText.fontSize = 24;
+        hudText.color = Color.green;
+        hudText.alignment = TextAnchor.UpperLeft;
+        
+        RectTransform hudRt = hudGO.GetComponent<RectTransform>();
+        hudRt.anchorMin = new Vector2(0, 1);
+        hudRt.anchorMax = new Vector2(0, 1);
+        hudRt.pivot = new Vector2(0, 1);
+        hudRt.anchoredPosition = new Vector2(10, -10);
+        hudRt.sizeDelta = new Vector2(600, 200);
+
+        DesktopHUDOverlay hudOverlay = hudGO.AddComponent<DesktopHUDOverlay>();
+        SerializedObject hudSO = new SerializedObject(hudOverlay);
+        hudSO.FindProperty("hudText").objectReferenceValue = hudText;
+        hudSO.FindProperty("receiver").objectReferenceValue = receiver;
+        hudSO.FindProperty("config").objectReferenceValue = config;
+        hudSO.FindProperty("gazeProvider").objectReferenceValue = gazeProvider;
+        hudSO.ApplyModifiedProperties();
+
+        // 7. Save Scene
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/DesktopFoveated.unity");
         Debug.Log("Desktop Scene setup complete! Saved to Assets/Scenes/DesktopFoveated.unity");
     }

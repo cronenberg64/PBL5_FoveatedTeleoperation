@@ -6,12 +6,29 @@ using UnityEngine;
 /// On Quest Pro: uses OVREyeGaze (eye-tracking hardware).
 /// On Quest 3 / Editor: falls back to head-gaze (center-eye forward ray).
 ///
-/// NOTE: This script uses conditional compilation. If you have the Meta XR SDK
 /// installed, define META_XR_SDK in Project Settings → Player → Scripting Define Symbols.
 /// Without it, only head-gaze will be available.
 /// </summary>
 public class GazeProvider : MonoBehaviour
 {
+    public enum GazeMode
+    {
+#if META_XR_SDK
+        OVR,
+#endif
+#if TOBII_SDK
+        Tobii,
+#endif
+#if WAVE_XR
+        Wave,
+#endif
+        Mouse
+    }
+
+    [Header("Gaze Mode")]
+    [Tooltip("Select the gaze input source")]
+    public GazeMode currentGazeMode = GazeMode.Mouse;
+
     [Header("Gaze Output (Read-Only)")]
     [Tooltip("Current gaze position in UV space (0–1) on the feed plane")]
     [SerializeField] private Vector2 gazeUV = new Vector2(0.5f, 0.5f);
@@ -102,7 +119,7 @@ public class GazeProvider : MonoBehaviour
 
     private void CheckEyeTrackingAvailability()
     {
-#if META_XR_SDK && false
+#if META_XR_SDK
         try
         {
             // Check if eye tracking is supported and enabled
@@ -126,7 +143,7 @@ public class GazeProvider : MonoBehaviour
 
     private Ray GetGazeRay()
     {
-#if META_XR_SDK && false
+#if META_XR_SDK
         if (isEyeTrackingActive)
         {
             return GetEyeTrackingRay();
@@ -144,7 +161,7 @@ public class GazeProvider : MonoBehaviour
         return new Ray(vrCamera.transform.position, vrCamera.transform.forward);
     }
 
-#if META_XR_SDK && false
+#if META_XR_SDK
     /// <summary>Eye-tracking ray using OVRPlugin (Quest Pro).</summary>
     private Ray GetEyeTrackingRay()
     {
