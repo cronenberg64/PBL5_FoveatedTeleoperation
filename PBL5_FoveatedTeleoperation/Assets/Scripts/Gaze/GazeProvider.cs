@@ -17,7 +17,7 @@ public class GazeProvider : MonoBehaviour
 #if META_XR_SDK
         OVR,
 #endif
-#if TOBII_SDK
+#if TOBII_SDK && (UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
         Tobii,
 #endif
 #if WAVE_XR
@@ -72,6 +72,20 @@ public class GazeProvider : MonoBehaviour
     /// <summary>Whether hardware eye tracking is being used.</summary>
     public bool IsEyeTrackingActive => isEyeTrackingActive;
 
+    /// <summary>Returns true if Tobii is providing valid gaze samples right now.</summary>
+    public bool IsTobiiAvailable
+    {
+        get
+        {
+#if TOBII_SDK && (UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
+            var gazePoint = Tobii.GameIntegration.Net.TobiiGameIntegrationApi.GetLatestGazePoint();
+            return gazePoint.IsValid;
+#else
+            return false;
+#endif
+        }
+    }
+
     // ── External override (MouseGazeSource, Tobii, etc.) ────────────────
     // When set, skips the raycast entirely and feeds this value directly.
     private bool _hasOverride = false;
@@ -107,6 +121,12 @@ public class GazeProvider : MonoBehaviour
 
     private void Update()
     {
+        if (gazeMode == GazeMode.Tobii && Application.platform != RuntimePlatform.WindowsEditor && Application.platform != RuntimePlatform.WindowsPlayer)
+        {
+            Debug.LogWarning("Tobii is only supported on Windows. Falling back to Mouse gaze.");
+            gazeMode = GazeMode.Mouse;
+        }
+
         if (gazeMode == GazeMode.Mouse)
         {
             if (_hasOverride)
@@ -121,11 +141,18 @@ public class GazeProvider : MonoBehaviour
         }
         else if (gazeMode == GazeMode.Tobii)
         {
-#if TOBII_SDK
-            var gazePoint = Tobii.Gaming.TobiiAPI.GetGazePoint();
+#if TOBII_SDK && (UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
+            var gazePoint = Tobii.GameIntegration.Net.TobiiGameIntegrationApi.GetLatestGazePoint();
             if (gazePoint.IsValid)
             {
-                gazeUV = gazePoint.Viewport;
+                float screenW = 1920f;
+                float screenH = 1080f;
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+                var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                screenW = bounds.Width;
+                screenH = bounds.Height;
+#endif
+                gazeUV = new Vector2(Mathf.Clamp01(gazePoint.X / screenW), Mathf.Clamp01(1f - (gazePoint.Y / screenH)));
             }
 #else
             if (_hasOverride) gazeUV = _overrideUV;

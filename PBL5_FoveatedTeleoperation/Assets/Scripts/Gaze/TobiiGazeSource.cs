@@ -1,6 +1,6 @@
 using UnityEngine;
-#if TOBII_SDK
-using Tobii.Gaming;
+#if TOBII_SDK && (UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
+using Tobii.GameIntegration.Net;
 #endif
 
 /// <summary>
@@ -32,7 +32,7 @@ public class TobiiGazeSource : MonoBehaviour
 
     private void Start()
     {
-#if TOBII_SDK
+#if TOBII_SDK && (UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
         isTobiiPresent = true;
         Debug.Log("[TobiiGazeSource] Tobii SDK detected and active.");
 #else
@@ -45,12 +45,20 @@ public class TobiiGazeSource : MonoBehaviour
     {
         if (!useTobii) return;
 
-#if TOBII_SDK
-        GazePoint gazePoint = TobiiAPI.GetGazePoint();
+#if TOBII_SDK && (UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
+        var gazePoint = TobiiGameIntegrationApi.GetLatestGazePoint();
         if (gazePoint.IsValid)
         {
-            // Tobii screen coordinates are 0-1 from bottom-left to top-right
-            currentGazeUV = gazePoint.Viewport;
+            float screenW = 1920f;
+            float screenH = 1080f;
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+            var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            screenW = bounds.Width;
+            screenH = bounds.Height;
+#endif
+            // Tobii screen coordinates are relative to the primary monitor, top-left is (0,0).
+            // Unity UV is bottom-left (0,0).
+            currentGazeUV = new Vector2(Mathf.Clamp01(gazePoint.X / screenW), Mathf.Clamp01(1f - (gazePoint.Y / screenH)));
             _gazeProvider.SetGazeUVOverride(currentGazeUV);
         }
 #endif

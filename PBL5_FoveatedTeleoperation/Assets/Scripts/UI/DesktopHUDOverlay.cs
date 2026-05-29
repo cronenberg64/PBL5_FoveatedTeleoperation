@@ -37,8 +37,11 @@ public class DesktopHUDOverlay : MonoBehaviour
             _timer = 0f;
         }
 
+        string tobiiStatus = gazeProvider.IsTobiiAvailable ? "<color=green>Yes</color>" : "<color=red>No</color>";
+
         hudText.text = $"Status: {status} to mock_pioneer at IP {config.robotIP}\n" +
-                       $"Gaze Mode: {gazeProvider.currentGazeMode}\n" +
+                       $"Gaze Mode: {gazeProvider.ActiveGazeMode}\n" +
+                       $"Tobii Available: {tobiiStatus}\n" +
                        $"Bandwidth: ~{bandwidth} KB/s\n" +
                        $"Latency: {_latencyMock}";
     }

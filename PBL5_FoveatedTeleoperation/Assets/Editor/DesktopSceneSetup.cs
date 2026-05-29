@@ -74,6 +74,7 @@ public class DesktopSceneSetup
         GazeProvider gazeProvider = gazeGO.AddComponent<GazeProvider>();
         MouseGazeSource mouseSource = gazeGO.AddComponent<MouseGazeSource>();
         SerializedObject gazeProviderSO = new SerializedObject(gazeProvider);
+        gazeProviderSO.FindProperty("gazeMode").enumValueIndex = (int)GazeProvider.GazeMode.Tobii;
         gazeProviderSO.FindProperty("vrCamera").objectReferenceValue = cam;
         
         SerializedProperty feedPlanesProp = gazeProviderSO.FindProperty("feedPlanes");
