@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// Provides gaze coordinates (UV 0–1) for the foveated shader.
@@ -35,6 +36,19 @@ public class GazeProvider : MonoBehaviour
 
     [Tooltip("True if hardware eye tracking is active")]
     [SerializeField] private bool isEyeTrackingActive = false;
+
+    public enum GazeMode
+    {
+        OVR,
+        Tobii,
+        Mouse,
+        Wave
+    }
+
+    [Header("Gaze Mode Configuration")]
+    [SerializeField] private GazeMode gazeMode = GazeMode.Mouse;
+
+    public GazeMode ActiveGazeMode => gazeMode;
 
     // Metrics: count updates per second
     private int _updateCount;
@@ -93,14 +107,64 @@ public class GazeProvider : MonoBehaviour
 
     private void Update()
     {
-        if (_hasOverride)
+        if (gazeMode == GazeMode.Mouse)
         {
-            gazeUV = _overrideUV;
+            if (_hasOverride)
+            {
+                gazeUV = _overrideUV;
+            }
+            else
+            {
+                Vector2 mousePos = Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
+                gazeUV = new Vector2(Mathf.Clamp01(mousePos.x / Screen.width), Mathf.Clamp01(mousePos.y / Screen.height));
+            }
         }
-        else
+        else if (gazeMode == GazeMode.Tobii)
         {
-            Ray gazeRay = GetGazeRay();
-            UpdateGazeUV(gazeRay);
+#if TOBII_SDK
+            var gazePoint = Tobii.Gaming.TobiiAPI.GetGazePoint();
+            if (gazePoint.IsValid)
+            {
+                gazeUV = gazePoint.Viewport;
+            }
+#else
+            if (_hasOverride) gazeUV = _overrideUV;
+            else gazeUV = new Vector2(0.5f, 0.5f);
+#endif
+        }
+        else if (gazeMode == GazeMode.Wave)
+        {
+#if WAVE_XR
+            gazeUV = new Vector2(0.5f, 0.5f);
+#else
+            if (_hasOverride) gazeUV = _overrideUV;
+            else gazeUV = new Vector2(0.5f, 0.5f);
+#endif
+        }
+        else // GazeMode.OVR
+        {
+#if META_XR_SDK && false
+            if (isEyeTrackingActive)
+            {
+                Ray gazeRay = GetEyeTrackingRay();
+                UpdateGazeUV(gazeRay);
+            }
+            else
+            {
+                Ray gazeRay = GetHeadGazeRay();
+                UpdateGazeUV(gazeRay);
+            }
+#else
+            if (_hasOverride)
+            {
+                gazeUV = _overrideUV;
+            }
+            else
+            {
+                Ray gazeRay = GetHeadGazeRay();
+                UpdateGazeUV(gazeRay);
+            }
+#endif
         }
 
         _updateCount++;

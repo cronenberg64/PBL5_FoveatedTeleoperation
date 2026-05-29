@@ -23,6 +23,10 @@ public class NetworkConfig : ScriptableObject
     [Tooltip("TCP port for sending gaze UV coordinates to the server")]
     public int gazePort = 1236;
 
+    [Header("Scene Frame Streaming Connection")]
+    [Tooltip("TCP port for sending high-quality camera frames from Unity to the server")]
+    public int sceneFramePort = 1237;
+
     [Header("Protocol Constants")]
     [Tooltip("Neutral turn value (straight ahead)")]
     public int neutralTurn = 90;

@@ -53,6 +53,17 @@ public class RobotClient : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Send a raw command string (e.g. config message) directly over the control socket.
+    /// </summary>
+    public void SendRawCommand(string command)
+    {
+        lock (lockObj)
+        {
+            pendingCommand = command;
+        }
+    }
+
     // ─── Lifecycle ──────────────────────────────────────────────
 
     private void Start()

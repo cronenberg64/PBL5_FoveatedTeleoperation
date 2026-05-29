@@ -28,6 +28,29 @@ Example: `$1090256\n` → forward, straight, neutral speed.
 
 Implemented in `RobotClient.SendDriveCommand`.
 
+### Configuration command format
+
+```
+$CFG[mode:8][pq:3][fq:3]\n
+```
+
+All ASCII. Total 18 bytes including newline.
+
+| Field   | Width | Values  | Semantics                            |
+|---------|-------|---------|--------------------------------------|
+| `$CFG`  | 4     | literal | Config command prefix                |
+| mode    | 8     | string  | Mode name, left-aligned, space-padded: `"uniform "`, `"gaze    "`, `"periph  "` |
+| pq      | 3     | 000–100 | Peripheral quality (zero-padded)     |
+| fq      | 3     | 000–100 | Fovea quality (zero-padded)          |
+| `\n`    | 1     | `0x0A`  | End-of-frame                         |
+
+Examples:
+- `$CFGuniform 050050\n` → switches to Uniform Q50 mode.
+- `$CFGgaze    015085\n` → switches to Gaze foveation mode (periph Q15, fovea Q85).
+- `$CFGperiph  030030\n` → switches to Peripheral-only Q30 mode.
+
+Implemented in `ConditionController.SetCondition`.
+
 ---
 
 ## Port 1235 — Camera Feed (Server → Unity)
@@ -105,6 +128,18 @@ Total header: **16 bytes**.
 
 ---
 
+### Peripheral-only mode payload
+
+Activated via `$CFGperiph  [pq:3][fq:3]\n` or `--mode periph`. 
+
+The payload uses the exact same 16-byte dual-payload binary layout as gaze-contingent mode, but with the following parameters:
+- `len_fovea = 0` (the fovea_jpeg payload is omitted / 0 bytes)
+- `crop_x = 0`, `crop_y = 0`, `crop_w = 0`, `crop_h = 0`
+
+Unity's `CameraFeedReceiver` detects `len_fovea = 0` and renders only the peripheral full-frame JPEG at the peripheral quality.
+
+---
+
 ## Port 1236 — Gaze Coordinates (Unity → Server)
 
 Direction: Unity client **sends**, server **receives**.
@@ -128,6 +163,22 @@ Example: `$GAZE500500\n` → gaze at the centre of the image.
 
 Sent at ~30 Hz by `GazeUploader.cs` (or `MouseGazeSource.cs` for desktop proxy).
 The server holds the latest non-stale gaze; values older than 500 ms fall back to (0.5, 0.5).
+
+---
+
+## Port 1237 — Unity Scene Frame Input (Unity → Server)
+
+Direction: Unity client **sends**, mock server **receives**.
+Active when the server is started with `--camera-source unity`.
+
+### Frame format
+
+```
+[4 bytes, big-endian uint32: payload length N]
+[N bytes: raw JPEG frame data encoded from Unity camera at Q95]
+```
+
+This protocol allows Unity to stream its high-resolution camera rendering frames directly into the mock server. The server decodes this high-Q stream, then applies uniform or foveated encoding on it before streaming the resulting compressed payload back over Port 1235.
 
 ---
 

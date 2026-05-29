@@ -27,7 +27,7 @@ import math
 import cv2
 import numpy as np
 
-from foveation import encode_uniform, encode_dual_payload
+from foveation import encode_uniform, encode_dual_payload, encode_peripheral_only
 from metrics_server import MetricsServer
 
 # ── Shared state ─────────────────────────────────────────────────────────────
@@ -58,9 +58,13 @@ def _generate_synthetic_frame() -> np.ndarray:
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
     return frame
 
-# Set by camera_thread at startup; read by control/gaze threads for CSV logging
+# Set by camera_thread/control_thread; read by control/gaze/camera threads for CSV logging/encoding
+_config_lock = threading.Lock()
 _current_mode: str = "uniform"
 _current_quality: int = 20
+_current_periph_quality: int = 15
+_current_fovea_quality: int = 85
+_current_fovea_size: int = 200
 
 # Thread-safe queue for passing frames to the main thread for display (macOS requirement)
 _preview_queue = queue.Queue(maxsize=1)
@@ -129,6 +133,36 @@ def _parse_control(line: str) -> tuple[int, int, int]:
     return cmd, turn, speed
 
 
+def _handle_cfg(line: str) -> None:
+    # Format: $CFG[mode:8][pq:3][fq:3]
+    # Example: $CFGuniform 050050
+    if len(line) < 18:
+        raise ValueError(f"CFG command too short: {line!r}")
+    
+    mode_str = line[4:12].strip()
+    pq_str = line[12:15]
+    fq_str = line[15:18]
+    
+    try:
+        pq = int(pq_str)
+        fq = int(fq_str)
+    except ValueError:
+        raise ValueError(f"Non-integer quality in CFG: {line!r}")
+        
+    if mode_str not in ("uniform", "gaze", "periph"):
+        raise ValueError(f"Unknown mode in CFG: {mode_str!r}")
+        
+    global _current_mode, _current_quality, _current_periph_quality, _current_fovea_quality
+    with _config_lock:
+        _current_mode = mode_str
+        if mode_str == "uniform":
+            _current_quality = pq
+        _current_periph_quality = pq
+        _current_fovea_quality = fq
+        
+    print(f"[Control] Runtime config updated: mode={mode_str}, pq={pq}, fq={fq}")
+
+
 def control_thread(stop_event: threading.Event) -> None:
     server_sock = _make_server_socket(1234)
     server_sock.settimeout(1.0)
@@ -149,15 +183,20 @@ def control_thread(stop_event: threading.Event) -> None:
                     print("[Control] Client disconnected.")
                     break
                 try:
-                    cmd, turn, speed = _parse_control(line)
-                    ts = time.time()
-                    print(f"[Control] t={ts:.3f}  cmd={cmd}  turn={turn}  speed={speed}")
-                    if _metrics:
-                        _metrics.log(
-                            "cmd_received",
-                            cmd_received=f"{cmd},{turn},{speed}",
-                            quality_mode=_current_mode,
-                        )
+                    if line.startswith("$CFG"):
+                        _handle_cfg(line)
+                    else:
+                        cmd, turn, speed = _parse_control(line)
+                        ts = time.time()
+                        print(f"[Control] t={ts:.3f}  cmd={cmd}  turn={turn}  speed={speed}")
+                        with _config_lock:
+                            mode_lbl = _current_mode
+                        if _metrics:
+                            _metrics.log(
+                                "cmd_received",
+                                cmd_received=f"{cmd},{turn},{speed}",
+                                quality_mode=mode_lbl,
+                            )
                 except ValueError as exc:
                     print(f"[Control] Parse error: {exc}")
         except Exception as exc:
@@ -225,6 +264,76 @@ def gaze_thread(stop_event: threading.Event) -> None:
     server_sock.close()
 
 
+_unity_frame_queue = queue.Queue(maxsize=2)
+
+
+def _recv_exact(conn: socket.socket, num_bytes: int) -> Optional[bytes]:
+    """Read exactly num_bytes from the socket, or return None if closed."""
+    buf = b""
+    while len(buf) < num_bytes:
+        chunk = conn.recv(num_bytes - len(buf))
+        if not chunk:
+            return None
+        buf += chunk
+    return buf
+
+
+def unity_frame_thread(stop_event: threading.Event) -> None:
+    """Listen on port 1237 for incoming frames from Unity, decode them, and put them in the queue."""
+    server_sock = _make_server_socket(1237)
+    server_sock.settimeout(1.0)
+    
+    while not stop_event.is_set():
+        try:
+            conn, addr = server_sock.accept()
+        except socket.timeout:
+            continue
+        print(f"[UnityFrame] Client connected: {addr}")
+        
+        try:
+            conn.settimeout(2.0)
+            while not stop_event.is_set():
+                # 1. Read 4-byte length prefix
+                len_buf = _recv_exact(conn, 4)
+                if not len_buf:
+                    print("[UnityFrame] Client disconnected.")
+                    break
+                
+                length = struct.unpack(">I", len_buf)[0]
+                
+                # 2. Read raw JPEG bytes
+                jpeg_bytes = _recv_exact(conn, length)
+                if not jpeg_bytes:
+                    print("[UnityFrame] Connection closed prematurely.")
+                    break
+                
+                # 3. Decode JPEG to numpy BGR image
+                nparr = np.frombuffer(jpeg_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if frame is None:
+                    print("[UnityFrame] Failed to decode JPEG frame.")
+                    continue
+                
+                # 4. Push to shared queue, discarding oldest to avoid latency buildup
+                while not _unity_frame_queue.empty():
+                    try:
+                        _unity_frame_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                
+                _unity_frame_queue.put(frame)
+        except Exception as exc:
+            print(f"[UnityFrame] Error: {exc}")
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+                
+    server_sock.close()
+    print("[UnityFrame] Server socket closed.")
+
+
 # ── Camera streamer (port 1235) ───────────────────────────────────────────────
 
 def _send_frame(conn: socket.socket, payload: bytes) -> None:
@@ -242,20 +351,32 @@ def camera_thread(
     fovea_size: int,
     show: bool = False,
     loss: float = 0.0,
+    camera_source: str = "webcam",
 ) -> None:
-    global _current_mode, _current_quality
-    _current_mode = mode
-    _current_quality = quality
+    global _current_mode, _current_quality, _current_periph_quality, _current_fovea_quality, _current_fovea_size
+    with _config_lock:
+        _current_mode = mode
+        _current_quality = quality
+        _current_periph_quality = periph_quality
+        _current_fovea_quality = fovea_quality
+        _current_fovea_size = fovea_size
 
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("[Camera] WARNING: Cannot open webcam (cv2.VideoCapture(0)). "
-              "Falling back to synthetic frame generator.")
-        cap = None
+    cap = None
+    if camera_source == "webcam":
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print("[Camera] WARNING: Cannot open webcam (cv2.VideoCapture(0)). "
+                  "Falling back to synthetic frame generator.")
+            cap = None
+        else:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            print(f"[Camera] Webcam opened — mode={mode}"
+                  + (f", quality={quality}" if mode == "uniform"
+                     else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
+                          f", fovea_size={fovea_size}"))
     else:
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        print(f"[Camera] Webcam opened — mode={mode}"
+        print(f"[Camera] Unity frame source active (listening on port 1237) — mode={mode}"
               + (f", quality={quality}" if mode == "uniform"
                  else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
                       f", fovea_size={fovea_size}"))
@@ -271,7 +392,13 @@ def camera_thread(
             except socket.timeout:
                 # If no client, but show is on, we still want to see the camera
                 if show:
-                    if cap is not None:
+                    if camera_source == "unity":
+                        try:
+                            frame = _unity_frame_queue.get(timeout=0.1)
+                            ok = True
+                        except queue.Empty:
+                            ok = False
+                    elif cap is not None:
                         ok, frame = cap.read()
                     else:
                         ok = True
@@ -286,13 +413,20 @@ def camera_thread(
 
             print(f"[Camera] Client connected: {addr}")
             
-            frame_interval = 1.0 / 20.0   # ~20 FPS target
+            frame_interval = 1.0 / 20.0   # ~20 FPS target for webcam/synthetic
 
             try:
                 while not stop_event.is_set():
                     t0 = time.time()
 
-                    if cap is not None:
+                    if camera_source == "unity":
+                        try:
+                            # Block until frame arrives from Unity
+                            frame = _unity_frame_queue.get(timeout=0.5)
+                            ok = True
+                        except queue.Empty:
+                            continue
+                    elif cap is not None:
                         ok, frame = cap.read()
                         if not ok:
                             print("[Camera] Webcam read failed — skipping frame.")
@@ -302,15 +436,23 @@ def camera_thread(
                         ok = True
                         frame = _generate_synthetic_frame()
 
+                    # Read current config under lock
+                    with _config_lock:
+                        curr_mode = _current_mode
+                        curr_quality = _current_quality
+                        curr_pq = _current_periph_quality
+                        curr_fq = _current_fovea_quality
+                        curr_fs = _current_fovea_size
+
                     gaze_u, gaze_v, gaze_ts = _get_gaze()
 
-                    if mode == "gaze":
+                    if curr_mode == "gaze":
                         payload, stats = encode_dual_payload(
                             frame,
                             (gaze_u, gaze_v),
-                            periph_quality=periph_quality,
-                            fovea_quality=fovea_quality,
-                            fovea_size=fovea_size,
+                            periph_quality=curr_pq,
+                            fovea_quality=curr_fq,
+                            fovea_size=curr_fs,
                         )
                         
                         if show:
@@ -334,18 +476,40 @@ def camera_thread(
                                 bytes_periph=stats["periph_bytes"],
                                 bytes_fovea=stats["fovea_bytes"],
                                 gaze_uv=f"{gaze_u:.3f},{gaze_v:.3f}",
-                                quality_mode=mode,
+                                quality_mode=curr_mode,
                                 crop_x=str(stats["crop_x"]),
                                 crop_y=str(stats["crop_y"]),
                                 crop_w=str(stats["crop_w"]),
                                 crop_h=str(stats["crop_h"]),
                                 delta_ms=f"{delta_ms:.1f}",
                             )
-                    else:
-                        payload = encode_uniform(frame, quality)
+                    elif curr_mode == "periph":
+                        payload = encode_peripheral_only(frame, curr_pq)
                         if show:
                             try:
-                                _preview_queue.put_nowait((f"Uniform (Q={quality})", frame))
+                                _preview_queue.put_nowait(("Periph-Only Mode", frame))
+                            except queue.Full:
+                                pass
+                        
+                        if _metrics:
+                            _metrics.log(
+                                "frame_sent",
+                                bytes_total=len(payload),
+                                bytes_periph=len(payload) - 16,
+                                bytes_fovea=0,
+                                gaze_uv=f"{gaze_u:.3f},{gaze_v:.3f}",
+                                quality_mode=curr_mode,
+                                crop_x="0",
+                                crop_y="0",
+                                crop_w="0",
+                                crop_h="0",
+                                delta_ms="0.0",
+                            )
+                    else:
+                        payload = encode_uniform(frame, curr_quality)
+                        if show:
+                            try:
+                                _preview_queue.put_nowait((f"Uniform (Q={curr_quality})", frame))
                             except queue.Full:
                                 pass
                         
@@ -354,7 +518,7 @@ def camera_thread(
                                 "frame_sent",
                                 bytes_total=len(payload),
                                 gaze_uv=f"{gaze_u:.3f},{gaze_v:.3f}",
-                                quality_mode=f"{mode}-{quality}",
+                                quality_mode=f"{curr_mode}-{curr_quality}",
                             )
 
                     try:
@@ -366,10 +530,12 @@ def camera_thread(
                         print("[Camera] Client disconnected mid-stream.")
                         break
 
-                    elapsed = time.time() - t0
-                    sleep_t = frame_interval - elapsed
-                    if sleep_t > 0:
-                        time.sleep(sleep_t)
+                    # Only regulate frame rate for webcam/synthetic (Unity source is self-regulated at 30Hz)
+                    if camera_source != "unity":
+                        elapsed = time.time() - t0
+                        sleep_t = frame_interval - elapsed
+                        if sleep_t > 0:
+                            time.sleep(sleep_t)
 
             except Exception as exc:
                 print(f"[Camera] Stream error: {exc}")
@@ -379,9 +545,10 @@ def camera_thread(
                 except Exception:
                     pass
     finally:
-        cap.release()
+        if cap is not None:
+            cap.release()
         server_sock.close()
-        print("[Camera] Webcam released.")
+        print("[Camera] Server socket and resources released.")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -392,9 +559,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["uniform", "gaze"],
+        choices=["uniform", "gaze", "periph"],
         default="uniform",
-        help="Camera encoding mode. 'uniform' = single JPEG. 'gaze' = dual-payload ROI (default: uniform).",
+        help="Camera encoding mode. 'uniform' = single JPEG. 'gaze' = dual-payload ROI. 'periph' = peripheral-only (default: uniform).",
     )
     parser.add_argument(
         "--quality",
@@ -441,17 +608,35 @@ def main() -> None:
         metavar="N",
         help="Simulate packet loss: drop N percent of payloads (0.0 to 100.0).",
     )
+    parser.add_argument(
+        "--camera-source",
+        choices=["webcam", "unity"],
+        default="webcam",
+        help="Source of camera frames (default: webcam).",
+    )
     args = parser.parse_args()
+
+    global _current_mode, _current_quality, _current_periph_quality, _current_fovea_quality, _current_fovea_size
+    with _config_lock:
+        _current_mode = args.mode
+        _current_quality = args.quality
+        _current_periph_quality = args.periph_quality
+        _current_fovea_quality = args.fovea_quality
+        _current_fovea_size = args.fovea_size
 
     global _metrics
     _metrics = MetricsServer(log_dir=args.log_dir)
     mode_label = (
         f"uniform-{args.quality}"
         if args.mode == "uniform"
-        else f"gaze-p{args.periph_quality}-f{args.fovea_quality}"
+        else (f"gaze-p{args.periph_quality}-f{args.fovea_quality}"
+              if args.mode == "gaze"
+              else f"periph-p{args.periph_quality}")
     )
     if args.loss > 0:
         mode_label += f"-loss{args.loss}%"
+    if args.camera_source == "unity":
+        mode_label += f"-unity"
     
     _metrics.log("server_start", quality_mode=mode_label)
 
@@ -474,11 +659,17 @@ def main() -> None:
                 args.fovea_size,
                 args.show,
                 args.loss,
+                args.camera_source,
             ),
             name="CameraThread",
             daemon=True,
         ),
     ]
+
+    if args.camera_source == "unity":
+        threads.append(
+            threading.Thread(target=unity_frame_thread, args=(stop_event,), name="UnityFrameThread", daemon=True)
+        )
 
     for t in threads:
         t.start()
@@ -488,6 +679,7 @@ def main() -> None:
              else f", periph_quality={args.periph_quality}"
                   f", fovea_quality={args.fovea_quality}"
                   f", fovea_size={args.fovea_size}"))
+    print(f"[Server] Camera Source: {args.camera_source}")
     print("[Server] Press Ctrl+C to stop.\n")
 
     try:
