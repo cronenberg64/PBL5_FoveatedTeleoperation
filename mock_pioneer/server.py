@@ -23,6 +23,12 @@ import threading
 import time
 from typing import Optional
 import math
+import sys
+import os
+import glob
+
+# Suppress verbose OpenCV warnings
+os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
 
 import cv2
 import numpy as np
@@ -96,6 +102,81 @@ def _make_server_socket(port: int) -> socket.socket:
     sock.listen(1)
     print(f"[Server] Listening on port {port}")
     return sock
+
+
+def probe_linux_video_devices() -> dict:
+    devices = {}
+    if sys.platform.startswith('linux'):
+        # Glob for /dev/video*
+        for path in glob.glob('/dev/video*'):
+            basename = os.path.basename(path)
+            try:
+                idx = int(basename[5:])
+                # Try to read name from sysfs
+                name_path = f"/sys/class/video4linux/video{idx}/name"
+                name = f"video{idx}"
+                if os.path.exists(name_path):
+                    with open(name_path, "r") as f:
+                        name = f.read().strip()
+                devices[idx] = name
+            except ValueError:
+                continue
+    return devices
+
+
+def probe_cameras() -> str:
+    available = []
+    linux_names = probe_linux_video_devices()
+    for idx in range(6):
+        cap = cv2.VideoCapture(idx)
+        if cap.isOpened():
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            ret, frame = cap.read()
+            if (ret and frame is not None) or (w > 0 and h > 0):
+                if ret and frame is not None:
+                    h, w = frame.shape[:2]
+                name = linux_names.get(idx, "USB Camera")
+                available.append(f"{idx}: {name} {w}x{h}")
+            cap.release()
+    return "[" + ", ".join(available) + "]"
+
+
+def _read_frame_with_retry(cap, idx, camera_flip, camera_source) -> tuple:
+    """
+    Read a frame from cap. If read fails, attempts up to 5 reconnects.
+    Returns (updated_cap, success, frame).
+    """
+    if cap is None:
+        return None, False, None
+        
+    ok, frame = cap.read()
+    if ok and frame is not None:
+        if camera_flip:
+            frame = cv2.flip(frame, 1)
+        return cap, True, frame
+        
+    print(f"[Camera] Camera read failed on index {idx} — initiating reconnect retry...")
+    for attempt in range(1, 6):
+        print(f"[Camera] Reconnect attempt {attempt}/5 in 1s...")
+        time.sleep(1.0)
+        try:
+            cap.release()
+        except Exception:
+            pass
+        cap = cv2.VideoCapture(idx)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            ok_check, check_frame = cap.read()
+            if ok_check and check_frame is not None:
+                print("[Camera] Camera reconnected successfully!")
+                if camera_flip:
+                    check_frame = cv2.flip(check_frame, 1)
+                return cap, True, check_frame
+                
+    print("[Camera] ERROR: Reconnection failed after 5 attempts. Falling back to synthetic generator.")
+    return None, False, None
 
 
 def _recv_line(conn: socket.socket, max_bytes: int = 64) -> Optional[str]:
@@ -352,6 +433,8 @@ def camera_thread(
     show: bool = False,
     loss: float = 0.0,
     camera_source: str = "webcam",
+    camera_index: int = 0,
+    camera_flip: bool = False,
 ) -> None:
     global _current_mode, _current_quality, _current_periph_quality, _current_fovea_quality, _current_fovea_size
     with _config_lock:
@@ -362,16 +445,22 @@ def camera_thread(
         _current_fovea_size = fovea_size
 
     cap = None
-    if camera_source == "webcam":
-        cap = cv2.VideoCapture(0)
+    idx = camera_index if camera_source == "rover" else 0
+    if camera_source in ("webcam", "rover"):
+        cap = cv2.VideoCapture(idx)
         if not cap.isOpened():
-            print("[Camera] WARNING: Cannot open webcam (cv2.VideoCapture(0)). "
-                  "Falling back to synthetic frame generator.")
+            if camera_source == "rover":
+                print(f"[Camera] WARNING: Cannot open rover camera index {idx}. "
+                      "Falling back to synthetic frame generator.")
+            else:
+                print("[Camera] WARNING: Cannot open webcam (cv2.VideoCapture(0)). "
+                      "Falling back to synthetic frame generator.")
             cap = None
         else:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            print(f"[Camera] Webcam opened — mode={mode}"
+            source_name = "Rover camera" if camera_source == "rover" else "Webcam"
+            print(f"[Camera] {source_name} opened — index={idx}, mode={mode}"
                   + (f", quality={quality}" if mode == "uniform"
                      else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
                           f", fovea_size={fovea_size}"))
@@ -399,7 +488,10 @@ def camera_thread(
                         except queue.Empty:
                             ok = False
                     elif cap is not None:
-                        ok, frame = cap.read()
+                        cap, ok, frame = _read_frame_with_retry(cap, idx, camera_flip, camera_source)
+                        if not ok:
+                            frame = _generate_synthetic_frame()
+                            ok = True
                     else:
                         ok = True
                         frame = _generate_synthetic_frame()
@@ -427,11 +519,10 @@ def camera_thread(
                         except queue.Empty:
                             continue
                     elif cap is not None:
-                        ok, frame = cap.read()
+                        cap, ok, frame = _read_frame_with_retry(cap, idx, camera_flip, camera_source)
                         if not ok:
-                            print("[Camera] Webcam read failed — skipping frame.")
-                            time.sleep(frame_interval)
-                            continue
+                            frame = _generate_synthetic_frame()
+                            ok = True
                     else:
                         ok = True
                         frame = _generate_synthetic_frame()
@@ -610,11 +701,46 @@ def main() -> None:
     )
     parser.add_argument(
         "--camera-source",
-        choices=["webcam", "unity"],
+        choices=["webcam", "unity", "rover"],
         default="webcam",
         help="Source of camera frames (default: webcam).",
     )
+    parser.add_argument(
+        "--camera-index",
+        type=int,
+        default=0,
+        help="Camera index for cv2.VideoCapture (default: 0).",
+    )
+    parser.add_argument(
+        "--camera-flip",
+        action="store_true",
+        help="If true, flip the camera frames horizontally (cv2.flip(frame, 1)) to handle inverted mounts.",
+    )
     args = parser.parse_args()
+
+    # Startup validation check for rover camera
+    if args.camera_source == "rover":
+        cap = cv2.VideoCapture(args.camera_index)
+        if not cap.isOpened():
+            available = probe_cameras()
+            sys.exit(f"[Server] ERROR: cv2.VideoCapture({args.camera_index}) failed. Available indices: {available}")
+        
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0 or math.isnan(fps):
+            fps = 30.0
+            
+        ret, frame = cap.read()
+        if not ret or frame is None or w == 0 or h == 0:
+            cap.release()
+            available = probe_cameras()
+            sys.exit(f"[Server] ERROR: cv2.VideoCapture({args.camera_index}) failed (0x0 or failed read). Available indices: {available}")
+            
+        print(f"[Server] Rover camera index={args.camera_index}: {w}x{h} @ {fps:.1f} fps")
+        cap.release()
 
     global _current_mode, _current_quality, _current_periph_quality, _current_fovea_quality, _current_fovea_size
     with _config_lock:
@@ -637,6 +763,8 @@ def main() -> None:
         mode_label += f"-loss{args.loss}%"
     if args.camera_source == "unity":
         mode_label += f"-unity"
+    elif args.camera_source == "rover":
+        mode_label += f"-rover"
     
     _metrics.log("server_start", quality_mode=mode_label)
 
@@ -660,6 +788,8 @@ def main() -> None:
                 args.show,
                 args.loss,
                 args.camera_source,
+                args.camera_index,
+                args.camera_flip,
             ),
             name="CameraThread",
             daemon=True,

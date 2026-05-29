@@ -76,26 +76,51 @@ public class TrialMetricsLogger : MonoBehaviour
 
     private void Update()
     {
-        var keyboard = Keyboard.current;
-        if (keyboard == null) return;
+        bool startPressed = false;
+        bool successPressed = false;
+        bool failPressed = false;
 
-        // Hotkey controls
-        if (keyboard.f5Key.wasPressedThisFrame)
+        var keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            if (keyboard.f5Key.wasPressedThisFrame) startPressed = true;
+            if (keyboard.f6Key.wasPressedThisFrame) successPressed = true;
+            if (keyboard.f7Key.wasPressedThisFrame) failPressed = true;
+            if (keyboard.f8Key.wasPressedThisFrame) RegisterCollision();
+        }
+
+#if META_XR_SDK
+        if (OVRInput.GetDown(OVRInput.RawButton.A, OVRInput.Controller.RTouch)) startPressed = true;
+        if (OVRInput.GetDown(OVRInput.RawButton.B, OVRInput.Controller.RTouch)) successPressed = true;
+        if (OVRInput.GetDown(OVRInput.RawButton.Y, OVRInput.Controller.LTouch)) failPressed = true;
+#endif
+
+#if WAVE_XR
+        var domDevice = WaveVR_Controller.Input(WaveVR_Controller.EDeviceType.Dominant);
+        var nonDomDevice = WaveVR_Controller.Input(WaveVR_Controller.EDeviceType.NonDominant);
+        if (domDevice != null && domDevice.connected)
+        {
+            if (domDevice.GetPressDown(wvr.WVR_InputId.WVR_InputId_Alias1_A)) startPressed = true;
+            if (domDevice.GetPressDown(wvr.WVR_InputId.WVR_InputId_Alias1_B)) successPressed = true;
+        }
+        if (nonDomDevice != null && nonDomDevice.connected)
+        {
+            if (nonDomDevice.GetPressDown(wvr.WVR_InputId.WVR_InputId_Alias1_Y)) failPressed = true;
+        }
+#endif
+
+        if (startPressed)
         {
             string scenario = scenarioSelector != null ? scenarioSelector.ActiveScenario.ToString() : "Unknown";
             StartTrial(scenario, CurrentCondition);
         }
-        if (keyboard.f6Key.wasPressedThisFrame)
+        if (successPressed)
         {
             EndTrial(true);
         }
-        if (keyboard.f7Key.wasPressedThisFrame)
+        if (failPressed)
         {
             EndTrial(false);
-        }
-        if (keyboard.f8Key.wasPressedThisFrame)
-        {
-            RegisterCollision();
         }
     }
 

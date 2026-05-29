@@ -140,7 +140,29 @@ Unity's `CameraFeedReceiver` detects `len_fovea = 0` and renders only the periph
 
 ---
 
-## Port 1236 — Gaze Coordinates (Unity → Server)
+### Rover Camera Support
+
+For physical lab trials, the server supports capturing video directly from a real rover camera via USB.
+
+#### Configuration Flags
+- `--camera-source rover`: Configures the server to capture frames from a hardware USB camera rather than a webcam or Unity stream.
+- `--camera-index N`: (int, default `0`) Selects the hardware camera index (maps to `cv2.VideoCapture(N)`).
+- `--camera-flip`: If specified, applies horizontal flipping (`cv2.flip(frame, 1)`) to handle inverted-mounted rover cameras.
+
+#### Robustness and Failover
+- **Startup Verification**: At launch, the server probes the camera at the selected index. If it fails to open or returns a 0x0 resolution, the server exits immediately and probes indices 0–5, reporting available devices (including device names on Linux).
+- **USB Hiccup Recovery**: If the camera disconnects mid-run, the server automatically initiates a 5-attempt retry sequence with 1-second delays. If connection is restored, the stream resumes; otherwise, it falls back to the synthetic feed to prevent client freezing.
+
+#### Tested-Known-Good Command Example
+```bash
+python server.py --camera-source rover --camera-index 2 \
+  --mode gaze --periph-quality 15 --fovea-quality 85 \
+  --show --camera-flip
+```
+
+---
+
+## Port 1236 ── Gaze Coordinates (Unity → Server)
 
 Direction: Unity client **sends**, server **receives**.
 
