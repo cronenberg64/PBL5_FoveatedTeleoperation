@@ -49,13 +49,10 @@ public class TobiiGazeSource : MonoBehaviour
         var gazePoint = TobiiGameIntegrationApi.GetLatestGazePoint();
         if (gazePoint.IsValid)
         {
-            float screenW = 1920f;
-            float screenH = 1080f;
-#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
-            screenW = bounds.Width;
-            screenH = bounds.Height;
-#endif
+            float screenW = GetSystemMetrics(SM_CXSCREEN);
+            float screenH = GetSystemMetrics(SM_CYSCREEN);
+            if (screenW <= 0f) screenW = 1920f;
+            if (screenH <= 0f) screenH = 1080f;
             // Tobii screen coordinates are relative to the primary monitor, top-left is (0,0).
             // Unity UV is bottom-left (0,0).
             currentGazeUV = new Vector2(Mathf.Clamp01(gazePoint.X / screenW), Mathf.Clamp01(1f - (gazePoint.Y / screenH)));
@@ -69,4 +66,11 @@ public class TobiiGazeSource : MonoBehaviour
         if (_gazeProvider != null)
             _gazeProvider.ClearGazeUVOverride();
     }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+    private const int SM_CXSCREEN = 0;
+    private const int SM_CYSCREEN = 1;
+#endif
 }

@@ -14,31 +14,6 @@ public class GazeProvider : MonoBehaviour
 {
     public enum GazeMode
     {
-#if META_XR_SDK
-        OVR,
-#endif
-#if TOBII_SDK && (UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
-        Tobii,
-#endif
-#if WAVE_XR
-        Wave,
-#endif
-        Mouse
-    }
-
-    [Header("Gaze Mode")]
-    [Tooltip("Select the gaze input source")]
-    public GazeMode currentGazeMode = GazeMode.Mouse;
-
-    [Header("Gaze Output (Read-Only)")]
-    [Tooltip("Current gaze position in UV space (0–1) on the feed plane")]
-    [SerializeField] private Vector2 gazeUV = new Vector2(0.5f, 0.5f);
-
-    [Tooltip("True if hardware eye tracking is active")]
-    [SerializeField] private bool isEyeTrackingActive = false;
-
-    public enum GazeMode
-    {
         OVR,
         Tobii,
         Mouse,
@@ -49,6 +24,13 @@ public class GazeProvider : MonoBehaviour
     [SerializeField] private GazeMode gazeMode = GazeMode.Mouse;
 
     public GazeMode ActiveGazeMode => gazeMode;
+
+    [Header("Gaze Output (Read-Only)")]
+    [Tooltip("Current gaze position in UV space (0–1) on the feed plane")]
+    [SerializeField] private Vector2 gazeUV = new Vector2(0.5f, 0.5f);
+
+    [Tooltip("True if hardware eye tracking is active")]
+    [SerializeField] private bool isEyeTrackingActive = false;
 
     // Metrics: count updates per second
     private int _updateCount;
@@ -145,13 +127,10 @@ public class GazeProvider : MonoBehaviour
             var gazePoint = Tobii.GameIntegration.Net.TobiiGameIntegrationApi.GetLatestGazePoint();
             if (gazePoint.IsValid)
             {
-                float screenW = 1920f;
-                float screenH = 1080f;
-#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-                var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
-                screenW = bounds.Width;
-                screenH = bounds.Height;
-#endif
+                float screenW = GetSystemMetrics(SM_CXSCREEN);
+                float screenH = GetSystemMetrics(SM_CYSCREEN);
+                if (screenW <= 0f) screenW = 1920f;
+                if (screenH <= 0f) screenH = 1080f;
                 gazeUV = new Vector2(Mathf.Clamp01(gazePoint.X / screenW), Mathf.Clamp01(1f - (gazePoint.Y / screenH)));
             }
 #else
@@ -350,4 +329,11 @@ public class GazeProvider : MonoBehaviour
             gazeUV = new Vector2(0.5f, 0.5f);
         }
     }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+    private const int SM_CXSCREEN = 0;
+    private const int SM_CYSCREEN = 1;
+#endif
 }

@@ -132,7 +132,7 @@ public class DesktopSceneSetup
         panelRt.anchorMax = new Vector2(0f, 1f);
         panelRt.pivot = new Vector2(0f, 1f);
         panelRt.anchoredPosition = new Vector2(20f, -20f);
-        panelRt.sizeDelta = new Vector2(400f, 160f);
+        panelRt.sizeDelta = new Vector2(400f, 185f);
 
         // Header and separator line
         CreateText(hudPanelGO, "Header", "TELEOPERATION STATS", -15f, 12, isBold: true);
@@ -153,6 +153,7 @@ public class DesktopSceneSetup
         TextMeshProUGUI gazeModeText = CreateText(hudPanelGO, "GazeModeText", "Gaze Mode: Mouse", -70f, 14);
         TextMeshProUGUI bandwidthText = CreateText(hudPanelGO, "BandwidthText", "Bandwidth: 0 B/s", -95f, 14);
         TextMeshProUGUI latencyText = CreateText(hudPanelGO, "LatencyText", "Latency: 0.0 ms", -120f, 14);
+        TextMeshProUGUI tobiiStatusText = CreateText(hudPanelGO, "TobiiStatusText", "Tobii Available: No", -145f, 14);
 
         // Bind HUD
         DesktopHUD hud = canvasGO.AddComponent<DesktopHUD>();
@@ -161,6 +162,7 @@ public class DesktopSceneSetup
         hudSO.FindProperty("gazeModeText").objectReferenceValue = gazeModeText;
         hudSO.FindProperty("bandwidthText").objectReferenceValue = bandwidthText;
         hudSO.FindProperty("latencyText").objectReferenceValue = latencyText;
+        hudSO.FindProperty("tobiiStatusText").objectReferenceValue = tobiiStatusText;
         hudSO.FindProperty("feedReceiver").objectReferenceValue = receiver;
         hudSO.FindProperty("gazeProvider").objectReferenceValue = gazeProvider;
         hudSO.FindProperty("config").objectReferenceValue = config;

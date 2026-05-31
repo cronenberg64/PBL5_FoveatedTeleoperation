@@ -62,7 +62,6 @@ public class CameraFeedReceiver : MonoBehaviour
     private float _bandwidthTimer = 0f;
 
     // Public properties
-    public bool IsConnected => isConnected;
     public float BandwidthBytesPerSec => _bandwidthBytesPerSec;
     public float LatencyMs => _lastDecodeMs;
 

@@ -824,7 +824,7 @@ PlayerSettings:
   webWasm2023: 0
   webEnableSubmoduleStrippingCompatibility: 0
   scriptingDefineSymbols:
-    Standalone: META_XR_SDK;TOBII_SDK
+    Standalone: META_XR_SDK
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:

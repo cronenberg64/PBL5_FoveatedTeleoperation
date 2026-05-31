@@ -8,6 +8,7 @@ public class DesktopHUD : MonoBehaviour
     [SerializeField] private TextMeshProUGUI gazeModeText;
     [SerializeField] private TextMeshProUGUI bandwidthText;
     [SerializeField] private TextMeshProUGUI latencyText;
+    [SerializeField] private TextMeshProUGUI tobiiStatusText;
 
     [Header("Dependencies")]
     [SerializeField] private CameraFeedReceiver feedReceiver;
@@ -88,6 +89,19 @@ public class DesktopHUD : MonoBehaviour
         else
         {
             if (gazeModeText != null) gazeModeText.text = "Gaze Mode: --";
+        }
+
+        if (tobiiStatusText != null)
+        {
+            if (gazeProvider != null)
+            {
+                bool available = gazeProvider.IsTobiiAvailable;
+                tobiiStatusText.text = $"Tobii Available: {(available ? "<color=green>Yes</color>" : "<color=red>No</color>")}";
+            }
+            else
+            {
+                tobiiStatusText.text = "Tobii Available: <color=red>No</color>";
+            }
         }
     }
 }
