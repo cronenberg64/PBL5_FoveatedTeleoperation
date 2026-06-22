@@ -7,4 +7,4 @@ mock_pioneer/logs/*.csv
 # macOS
 .DS_Store
 
-.vscode
+.vscode*.tgz
