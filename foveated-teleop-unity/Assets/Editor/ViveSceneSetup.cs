@@ -143,6 +143,13 @@ public class ViveSceneSetup
         soFov.ApplyModifiedProperties();
 
         GameObject inputObj = new GameObject("InputManager");
+        // Position capsule slightly in front of origin at floor level
+        inputObj.transform.position = new Vector3(0f, 0.5f, -3f);
+        // Add Rigidbody so RobotController.FixedUpdate can apply velocity
+        var rb = inputObj.AddComponent<Rigidbody>();
+        rb.constraints = RigidbodyConstraints.FreezePositionY
+                       | RigidbodyConstraints.FreezeRotationX
+                       | RigidbodyConstraints.FreezeRotationZ;
         // Add RobotController
         inputObj.AddComponent<RobotController>();
         // Add ConditionController
@@ -181,8 +188,14 @@ public class ViveSceneSetup
         // Add DesktopHUD to GazeManager to display status
         var hudComponent = gazeObj.AddComponent<DesktopHUD>();
         var hudSO = new SerializedObject(hudComponent);
-        hudSO.FindProperty("statusText").objectReferenceValue = tmp; // Just map all to the same text for now
+        hudSO.FindProperty("statusText").objectReferenceValue = tmp;
+        hudSO.FindProperty("gazeProvider").objectReferenceValue = gazeProvider;
+        hudSO.FindProperty("feedReceiver").objectReferenceValue = receiver;
         hudSO.ApplyModifiedProperties();
+
+        // Add TrialMetricsLogger singleton
+        GameObject trialLoggerObj = new GameObject("TrialMetricsLogger");
+        trialLoggerObj.AddComponent<TrialMetricsLogger>();
 
         // 7. Save Scene
         string scenePath = "Assets/Scenes/ViveFoveated.unity";
