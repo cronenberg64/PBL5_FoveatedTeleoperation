@@ -197,7 +197,50 @@ public class ViveSceneSetup
         GameObject trialLoggerObj = new GameObject("TrialMetricsLogger");
         trialLoggerObj.AddComponent<TrialMetricsLogger>();
 
-        // 7. Save Scene
+        // 7. RobotCam (child of InputManager) — captures the "robot's eye" view
+        GameObject robotCamObj = new GameObject("RobotCam");
+        robotCamObj.transform.SetParent(inputObj.transform, false);
+        robotCamObj.transform.localPosition = new Vector3(0f, 0.4f, 0.3f);
+        Camera robotCam = robotCamObj.AddComponent<Camera>();
+        robotCam.fieldOfView = 70f;
+        robotCam.nearClipPlane = 0.1f;
+        robotCam.farClipPlane = 500f;
+        robotCam.depth = -1;
+        robotCam.stereoTargetEye = StereoTargetEyeMask.None;
+        
+        // Assign RobotCam RenderTexture
+        string[] rtGuids = AssetDatabase.FindAssets("RobotCam t:RenderTexture");
+        RenderTexture robotRT = null;
+        if (rtGuids.Length > 0)
+        {
+            string rtPath = AssetDatabase.GUIDToAssetPath(rtGuids[0]);
+            robotRT = AssetDatabase.LoadAssetAtPath<RenderTexture>(rtPath);
+            robotCam.targetTexture = robotRT;
+        }
+        
+        // Add SceneFrameStreamer to stream frames to mock_pioneer
+        var streamer = robotCamObj.AddComponent<SceneFrameStreamer>();
+        var soStreamer = new SerializedObject(streamer);
+        if (configGuids.Length > 0)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(configGuids[0]);
+            NetworkConfig config = AssetDatabase.LoadAssetAtPath<NetworkConfig>(path);
+            soStreamer.FindProperty("config").objectReferenceValue = config;
+        }
+        if (robotRT != null)
+        {
+            soStreamer.FindProperty("targetRenderTexture").objectReferenceValue = robotRT;
+        }
+        soStreamer.FindProperty("enableStreaming").boolValue = true;
+        soStreamer.ApplyModifiedProperties();
+
+        // 8. Ground plane so the Rigidbody capsule doesn't fall through
+        GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        ground.name = "Ground";
+        ground.transform.position = Vector3.zero;
+        ground.transform.localScale = new Vector3(100f, 0.1f, 100f);
+
+        // 9. Save Scene
         string scenePath = "Assets/Scenes/ViveFoveated.unity";
         System.IO.Directory.CreateDirectory("Assets/Scenes");
         EditorSceneManager.SaveScene(newScene, scenePath);

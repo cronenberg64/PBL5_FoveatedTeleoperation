@@ -1,0 +1,213 @@
+# Master Test & Verification Checklist
+
+**PBL5 Foveated Teleoperation — All tests in one document.**
+
+---
+
+## Phase A.1.5 — Foveation Rendering Verification (BLOCKING)
+
+Run these ONCE before any study subjects.
+
+### Server-Side Verification
+
+- [ ] Start mock_pioneer in venv:
+  ```powershell
+  cd mock_pioneer
+  ./venv/scripts/activate.ps1
+  python server.py --camera-source unity --mode gaze --periph-quality 15 --fovea-quality 85 --show
+  ```
+- [ ] `--show` window opens and displays a frame (not blank)
+- [ ] Server startup log prints: `Encoding peripheral at quality 15, foveal at quality 85`
+- [ ] Open `logs/server_session_*.csv` — confirm `bytes_fovea` column is non-zero on most rows
+
+### Unity Editor Verification (DesktopFoveated first)
+
+- [ ] Open `DesktopFoveated.unity`, hit Play
+- [ ] Console shows `[CameraFeedReceiver] Connected successfully!`
+- [ ] Canvas shows the camera feed (not blank white)
+- [ ] Move mouse to corner of screen → sharp region follows mouse, opposite corner is pixelated
+- [ ] Press 1 → Uniform: entire canvas same quality (no foveal patch)
+- [ ] Press 2 → Foveated: sharp patch at mouse, periphery pixelated
+- [ ] Press 3 → PeripheralOnly: everything uniformly blurry, no sharp patch
+
+### VR Headset Verification (ViveFoveated)
+
+- [ ] Vive Streaming Hub on PC shows Focus Vision connected
+- [ ] Open `ViveFoveated.unity`, hit Play
+- [ ] Console shows `[SceneFrameStreamer] Connected successfully.`
+- [ ] Console shows `[CameraFeedReceiver] Connected successfully!`
+- [ ] Console shows `[GazeProvider] OpenXR Eye tracking dynamically detected!`
+- [ ] World-space canvas visible at ~2m distance, readable
+- [ ] Look at CORNER of canvas → corner is sharp, opposite corner is blurry
+- [ ] Look at CENTER → center is sharp, edges are blurry
+- [ ] Effect is driven by EYE gaze, not HEAD direction (turn head but look at same spot — patch stays)
+- [ ] Right thumbstick → capsule moves forward/backward, turns left/right
+- [ ] A button (right controller) → Console shows "Start Trial"
+- [ ] B button (right controller) → Console shows "End Trial | Success: True"
+- [ ] Y button (left controller) → Console shows "End Trial | Success: False"
+- [ ] Open `logs/trial_metrics_*.csv` → confirm rows written with correct fields
+
+### Condition Switching (while in VR, assistant presses keyboard)
+
+- [ ] Press 1 → Uniform: canvas uniformly crisp, no foveal effect
+- [ ] Press 2 → Foveated: sharp patch follows eye gaze, periphery pixelated
+- [ ] Press 3 → PeripheralOnly: everything uniformly blurry
+
+---
+
+## Phase A.2 — End-to-End Smoke Test (Self-Test, 9 Trials)
+
+Complete ALL 9 trial combinations yourself before any subject sees the system.
+
+### Pre-Run Setup
+- [ ] mock_pioneer running with: `--camera-source unity --mode gaze --periph-quality 15 --fovea-quality 85`
+- [ ] ViveFoveated scene loaded and playing
+- [ ] Eye tracking calibrated (via Vive Hub on headset)
+- [ ] Timer ready (phone or watch)
+
+### Trial Matrix
+
+| Trial | Scenario | Condition | Start (A) | End | Time | Collisions | Notes |
+|-------|----------|-----------|-----------|-----|------|------------|-------|
+| 1 | Corridor | Uniform (press 1) | [ ] | [ ] | ___s | ___ | |
+| 2 | Corridor | Foveated (press 2) | [ ] | [ ] | ___s | ___ | |
+| 3 | Corridor | PeripheralOnly (press 3) | [ ] | [ ] | ___s | ___ | |
+| 4 | Doorway | Uniform (press 1) | [ ] | [ ] | ___s | ___ | |
+| 5 | Doorway | Foveated (press 2) | [ ] | [ ] | ___s | ___ | |
+| 6 | Doorway | PeripheralOnly (press 3) | [ ] | [ ] | ___s | ___ | |
+| 7 | Obstacle | Uniform (press 1) | [ ] | [ ] | ___s | ___ | |
+| 8 | Obstacle | Foveated (press 2) | [ ] | [ ] | ___s | ___ | |
+| 9 | Obstacle | PeripheralOnly (press 3) | [ ] | [ ] | ___s | ___ | |
+
+### Post-Run Verification
+- [ ] Open `logs/trial_metrics_*.csv` — exactly 9 rows
+- [ ] All fields populated (no empty cells)
+- [ ] No NullReferenceException or crashes in Unity Console during full session
+- [ ] Total session time: _____ minutes (target: 30–40 min)
+- [ ] Motion sickness level: None / Mild / Moderate / Severe
+- [ ] Conditions are visually distinguishable to you
+- [ ] Eye tracking stayed calibrated throughout (foveal patch didn't drift)
+
+### If Issues Found
+- Frame rate too low → check Unity Stats overlay, aim for 90fps
+- Latency too high → check `logs/server_session_*.csv` latency column, target <100ms
+- Capsule speed too high → reduce `moveSpeed` in RobotController Inspector
+- HUD jitter → confirm HUD is parented to Camera, not world root
+
+---
+
+## Phase A.4 — Pilot Trials (2 Colleagues)
+
+### Pilot 1: _____________________ Date: __________
+
+- [ ] Pre-screening form completed — no exclusion criteria
+- [ ] Consent form signed
+- [ ] Briefing script read aloud verbatim
+- [ ] Eye tracking calibrated
+- [ ] 1 practice trial completed
+- [ ] 9 main trials completed (condition order per Latin Square)
+- [ ] Post-condition surveys completed (3x)
+- [ ] Post-session survey completed
+- [ ] CSV saved and backed up
+- [ ] Notes on confusion points: _________________________________
+- [ ] Session duration: _____ min
+
+### Pilot 2: _____________________ Date: __________
+
+- [ ] Pre-screening form completed — no exclusion criteria
+- [ ] Consent form signed
+- [ ] Briefing script read aloud verbatim
+- [ ] Eye tracking calibrated
+- [ ] 1 practice trial completed
+- [ ] 9 main trials completed (condition order per Latin Square)
+- [ ] Post-condition surveys completed (3x)
+- [ ] Post-session survey completed
+- [ ] CSV saved and backed up
+- [ ] Notes on confusion points: _________________________________
+- [ ] Session duration: _____ min
+
+### Post-Pilot Review
+- [ ] Briefing script revised based on confusion points
+- [ ] Per-subject timing estimate confirmed: _____ min
+- [ ] No fatal protocol issues identified
+- [ ] Pilot data saved to `logs/pilots/` subfolder (NOT included in main analysis)
+
+---
+
+## Phase A.5 — Main Study Session Checklist (Per Subject)
+
+**Print one copy of this page per subject.**
+
+Subject ID: S____ | Date: __________ | Time: __________
+Latin Square Ordering ID: ____ | Condition Order: __ → __ → __
+
+### Pre-Session (Minutes 0–5)
+- [ ] Pre-screening questionnaire completed
+- [ ] No exclusion criteria triggered
+- [ ] Consent form signed (both copies)
+- [ ] Subject ID assigned (DO NOT write name on data files)
+
+### Briefing (Minutes 5–10)
+- [ ] Briefing script read aloud VERBATIM
+- [ ] Subject asked "any questions?" — answered without revealing conditions
+- [ ] Headset fit adjusted
+- [ ] Eye tracking calibrated via Vive Hub
+
+### Practice (Minutes 10–15)
+- [ ] 1 practice trial with Uniform condition, any scenario
+- [ ] Subject understands controls (thumbstick + buttons)
+
+### Main Trials (Minutes 15–50)
+
+Condition order for this subject (from Latin Square sheet):
+1st condition: _____________ | 2nd condition: _____________ | 3rd condition: _____________
+
+| Trial | Scenario | Condition | Assistant Action | Started? | Ended? |
+|-------|----------|-----------|-----------------|----------|--------|
+| 1 | Corridor | _________ | Press __ on keyboard | [ ] | [ ] |
+| 2 | Doorway | _________ | (same condition) | [ ] | [ ] |
+| 3 | Obstacle | _________ | (same condition) | [ ] | [ ] |
+| | | | **Post-condition survey #1** | | [ ] |
+| 4 | Corridor | _________ | Press __ on keyboard | [ ] | [ ] |
+| 5 | Doorway | _________ | (same condition) | [ ] | [ ] |
+| 6 | Obstacle | _________ | (same condition) | [ ] | [ ] |
+| | | | **Post-condition survey #2** | | [ ] |
+| 7 | Corridor | _________ | Press __ on keyboard | [ ] | [ ] |
+| 8 | Doorway | _________ | (same condition) | [ ] | [ ] |
+| 9 | Obstacle | _________ | (same condition) | [ ] | [ ] |
+| | | | **Post-condition survey #3** | | [ ] |
+
+### Post-Session (Minutes 50–60)
+- [ ] Post-session survey completed
+- [ ] Debrief: reveal what the 3 conditions were (only after all data collected)
+- [ ] Thank subject
+
+### Data Management
+- [ ] CSV file saved: `trial_metrics_S____.csv`
+- [ ] CSV backed up to cloud / external drive
+- [ ] Post-condition survey data entered into spreadsheet
+- [ ] Post-session survey data entered into spreadsheet
+- [ ] Subject tracking spreadsheet updated
+
+### Researcher Notes
+- Any deviations from protocol: _________________________________
+- Technical issues: _________________________________
+- Subject observations: _________________________________
+
+---
+
+## Quick Reference: Key Commands
+
+| Action | Command |
+|--------|---------|
+| Start mock_pioneer (gaze mode) | `python server.py --camera-source unity --mode gaze --periph-quality 15 --fovea-quality 85` |
+| Switch to Uniform | Press `1` on keyboard |
+| Switch to Foveated | Press `2` on keyboard |
+| Switch to PeripheralOnly | Press `3` on keyboard |
+| Start trial (keyboard) | `F5` |
+| End trial success (keyboard) | `F6` |
+| End trial failure (keyboard) | `F7` |
+| Register collision (keyboard) | `F8` |
+| Start trial (VR controller) | A button (right) |
+| End trial success (VR) | B button (right) |
+| End trial failure (VR) | Y button (left) |
