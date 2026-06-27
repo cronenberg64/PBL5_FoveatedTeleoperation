@@ -24,11 +24,11 @@ public class FoveatedFeedController : MonoBehaviour
 
     [Tooltip("Width of the smooth transition band")]
     [Range(0.01f, 0.3f)]
-    [SerializeField] private float transitionWidth = 0.1f;
+    [SerializeField] private float transitionWidth = 0.05f;
 
-    [Tooltip("Pixelation block size for the periphery (higher = more blocky)")]
-    [Range(2f, 64f)]
-    [SerializeField] private float peripheryPixelSize = 32f;
+    [Tooltip("Blur radius for the periphery (higher = more blurry)")]
+    [Range(1f, 64f)]
+    [SerializeField] private float peripheryPixelSize = 15f;
 
     [Header("Toggle")]
     [SerializeField] private bool foveationEnabled = true;
@@ -41,6 +41,10 @@ public class FoveatedFeedController : MonoBehaviour
     private static readonly int FoveaRadiusId = Shader.PropertyToID("_FoveaRadius");
     private static readonly int TransitionWidthId = Shader.PropertyToID("_TransitionWidth");
     private static readonly int PeripheryPixelSizeId = Shader.PropertyToID("_PeripheryPixelSize");
+    private static readonly int FoveaTexId = Shader.PropertyToID("_FoveaTex");
+    private static readonly int CropRectId = Shader.PropertyToID("_CropRect");
+
+    private CameraFeedReceiver feedReceiver;
 
     private void Awake()
     {
@@ -57,6 +61,8 @@ public class FoveatedFeedController : MonoBehaviour
             Debug.LogError("[FoveatedFeedController] RawImage has no material assigned! " +
                            "Please assign a material using the Teleoperation/FoveatedFeed shader.");
         }
+
+        feedReceiver = FindAnyObjectByType<CameraFeedReceiver>();
     }
 
     private void Update()
@@ -79,6 +85,16 @@ public class FoveatedFeedController : MonoBehaviour
         feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
         feedMaterial.SetFloat(TransitionWidthId, transitionWidth);
         feedMaterial.SetFloat(PeripheryPixelSizeId, peripheryPixelSize);
+
+        if (feedReceiver != null)
+        {
+            if (feedReceiver.FoveaTex != null)
+            {
+                feedMaterial.SetTexture(FoveaTexId, feedReceiver.FoveaTex);
+            }
+            RectInt rect = feedReceiver.CropRect;
+            feedMaterial.SetVector(CropRectId, new Vector4(rect.x, rect.y, rect.width, rect.height));
+        }
     }
 
     private void OnDestroy()
@@ -103,9 +119,9 @@ public class FoveatedFeedController : MonoBehaviour
         foveaRadius = Mathf.Clamp(radius, 0.01f, 0.5f);
     }
 
-    /// <summary>Adjust the periphery pixel size at runtime.</summary>
+    /// <summary>Adjust the periphery blur radius at runtime.</summary>
     public void SetPeripheryPixelSize(float size)
     {
-        peripheryPixelSize = Mathf.Clamp(size, 2f, 64f);
+        peripheryPixelSize = Mathf.Clamp(size, 1f, 64f);
     }
 }

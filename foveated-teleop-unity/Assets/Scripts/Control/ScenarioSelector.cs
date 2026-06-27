@@ -36,16 +36,16 @@ public class ScenarioSelector : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        // Hotkeys for runtime switching
-        if (keyboard.digit1Key.wasPressedThisFrame)
+        // Hotkeys for runtime switching (using C, D, O or 7, 8, 9 to avoid conflict with Condition keys 1, 2, 3)
+        if (keyboard.cKey.wasPressedThisFrame || keyboard.digit7Key.wasPressedThisFrame)
         {
             ActivateScenario(DrivingScenario.Corridor);
         }
-        else if (keyboard.digit2Key.wasPressedThisFrame)
+        else if (keyboard.dKey.wasPressedThisFrame || keyboard.digit8Key.wasPressedThisFrame)
         {
             ActivateScenario(DrivingScenario.Doorway);
         }
-        else if (keyboard.digit3Key.wasPressedThisFrame)
+        else if (keyboard.oKey.wasPressedThisFrame || keyboard.digit9Key.wasPressedThisFrame)
         {
             ActivateScenario(DrivingScenario.Obstacle);
         }

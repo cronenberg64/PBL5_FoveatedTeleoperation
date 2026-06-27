@@ -144,6 +144,9 @@ Unity's `CameraFeedReceiver` detects `len_fovea = 0` and renders only the periph
 
 For physical lab trials, the server supports capturing video directly from a real rover camera via USB.
 
+> [!NOTE]
+> The proposed 360° equirectangular camera setup has been dropped to simplify System B's pipeline. The system standardizes on a single standard 2D HD RGB camera/webcam as the rover camera input, mapping directly to standard perspective foveation without extra client/server viewport projection overhead.
+
 #### Configuration Flags
 - `--camera-source rover`: Configures the server to capture frames from a hardware USB camera rather than a webcam or Unity stream.
 - `--camera-index N`: (int, default `0`) Selects the hardware camera index (maps to `cv2.VideoCapture(N)`).
@@ -204,6 +207,32 @@ This protocol allows Unity to stream its high-resolution camera rendering frames
 
 ---
 
+## Port 1238 — ESP32 Hardware Bridge (rover_bridge.py)
+
+Direction: ESP32 client **sends/receives**, `rover_bridge.py` server **receives/sends**.
+Active when the mock server is started with `--rover-out`.
+
+### Frame format
+
+```
+CMD[srv:3][mtr:3]\n
+```
+
+All ASCII. Total 10 bytes including newline.
+
+| Field | Width | Values | Semantics |
+|---------|-------|---------|--------------------------------------|
+| `CMD` | 3 | literal | Command prefix |
+| srv | 3 | 030–150 | Servo angle; 090 = center |
+| mtr | 3 | 055–455 | Motor speed; encoded as `255 + signed_speed`. 255 = stop, >255 = forward, <255 = reverse |
+| `\n` | 1 | `0x0A` | End-of-frame |
+
+Example: `CMD090255\n` → center steering, stopped motor.
+
+This protocol acts as a middleman for physical rover operation. `rover_bridge.py` receives the Unity drive commands (from Port 1234), translates them to the ESP32 firmware protocol, and sends them over Port 1238 to the physical rover's drive controller.
+
+---
+
 ## Gaze staleness and fallback
 
 The server's `_get_gaze()` returns `(0.5, 0.5)` if:
@@ -211,8 +240,6 @@ The server's `_get_gaze()` returns `(0.5, 0.5)` if:
 - The most recent gaze message is older than 500 ms.
 
 ---
-
-## Connection lifecycle
 
 All three services use `SO_REUSEADDR` and accept exactly one client per port.
 On client disconnect the server loops back to `accept()` without crashing.

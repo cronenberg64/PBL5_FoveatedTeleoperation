@@ -25,6 +25,13 @@ public class RobotController : MonoBehaviour
     private InputAction endSuccessAction;
     private InputAction endFailAction;
 
+    [Header("Wheel Input (Workaround)")]
+    public bool useWheel = true;
+    private InputAction wheelSteerAction;
+    private InputAction gamepadSteerAction;
+    private InputAction gamepadGasAction;
+    private InputAction gamepadBrakeAction;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -41,6 +48,14 @@ public class RobotController : MonoBehaviour
         startTrialAction = new InputAction(type: InputActionType.Button, binding: "<XRController>{RightHand}/primaryButton");
         endSuccessAction = new InputAction(type: InputActionType.Button, binding: "<XRController>{RightHand}/secondaryButton");
         endFailAction = new InputAction(type: InputActionType.Button, binding: "<XRController>{LeftHand}/secondaryButton");
+
+        // Setup Wheel Steering Input
+        wheelSteerAction = new InputAction(type: InputActionType.Value, binding: "<Joystick>/stick/x");
+        gamepadSteerAction = new InputAction(type: InputActionType.Value, binding: "<Gamepad>/leftStick/x");
+        
+        // Setup Pedals (XInput triggers)
+        gamepadGasAction = new InputAction(type: InputActionType.Value, binding: "<Gamepad>/rightTrigger");
+        gamepadBrakeAction = new InputAction(type: InputActionType.Value, binding: "<Gamepad>/leftTrigger");
     }
 
     private void OnEnable()
@@ -49,6 +64,10 @@ public class RobotController : MonoBehaviour
         startTrialAction?.Enable();
         endSuccessAction?.Enable();
         endFailAction?.Enable();
+        wheelSteerAction?.Enable();
+        gamepadSteerAction?.Enable();
+        gamepadGasAction?.Enable();
+        gamepadBrakeAction?.Enable();
     }
 
     private void OnDisable()
@@ -57,6 +76,10 @@ public class RobotController : MonoBehaviour
         startTrialAction?.Disable();
         endSuccessAction?.Disable();
         endFailAction?.Disable();
+        wheelSteerAction?.Disable();
+        gamepadSteerAction?.Disable();
+        gamepadGasAction?.Disable();
+        gamepadBrakeAction?.Disable();
     }
 
     private void Start()
@@ -142,6 +165,34 @@ public class RobotController : MonoBehaviour
             Vector2 vrInput = driveAction.ReadValue<Vector2>();
             moveInput += vrInput.y;
             turnInput += vrInput.x;
+        }
+
+        // Wheel Steering and Pedal Input
+        if (useWheel)
+        {
+            // Steering
+            float steerVal = 0f;
+            if (wheelSteerAction != null && wheelSteerAction.ReadValue<float>() != 0f)
+            {
+                steerVal = wheelSteerAction.ReadValue<float>();
+            }
+            else if (gamepadSteerAction != null && gamepadSteerAction.ReadValue<float>() != 0f)
+            {
+                steerVal = gamepadSteerAction.ReadValue<float>();
+            }
+
+            // Apply deadzone for centering jitter from wheel's hall sensors
+            if (Mathf.Abs(steerVal) > 0.05f)
+            {
+                turnInput += steerVal;
+            }
+
+            // Pedals
+            float gasVal = gamepadGasAction != null ? gamepadGasAction.ReadValue<float>() : 0f;
+            float brakeVal = gamepadBrakeAction != null ? gamepadBrakeAction.ReadValue<float>() : 0f;
+            
+            if (gasVal > 0.05f) moveInput += gasVal;
+            if (brakeVal > 0.05f) moveInput -= brakeVal;
         }
 
 #if META_XR_SDK

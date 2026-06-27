@@ -4,54 +4,113 @@
 
 ---
 
-## Phase A.1.5 — Foveation Rendering Verification (BLOCKING)
+## 1-Week Sprint Tracking (Real Rover Pivot)
+
+> **Note**: This is the current active sprint. The simulation phases below (Phase A.X) are now the fallback plan.
+
+| Day | Task Focus | Acceptance Met | Carry-over / Notes |
+|---|---|---|---|
+| 1 | Workstation Input + Foveation Fix | [x] | Pedals bypassed, mapped to keyboard W/S |
+| 2 | Mini PC Setup + Network Plumbing | ☐ | Mini PC connected to VINE5 Wi-Fi. IP must be set to 192.168.0.208 |
+| 3 | rover_bridge.py + ESP32 Connection | ☐ | |
+| 4 | End-to-End Bench Test | ☐ | |
+| 5 | Mobile Rover Test | ☐ | |
+| 6 | Buffer + Stability Pass | ☐ | |
+| 7 | Decision Point + Demo Prep | ☐ | |
+
+### Day 1 — Workstation Input + Foveation Fix
+- [x] Foveation visibly rendering in headset (foveal patch follows gaze) *(Fixed previously, verify on new run)*
+- [x] Serafim R1+ recognized by Windows
+- [x] Unity Input System reads wheel + pedals
+- [x] Capsule in ViveFoveated responds to wheel turn + pedal presses
+- [x] Keyboard fallback still works for debugging
+
+### Day 2 — Mini PC Setup + Network Plumbing
+- [ ] Mini PC running mock_pioneer, accessible from workstation over LAN
+- [ ] Webcam feed visible in Unity on workstation
+- [ ] Foveation works end-to-end across the network
+- [ ] Latency feels tolerable for driving (subjective)
+
+### Day 3 — rover_bridge.py + ESP32 Connection
+- [ ] Active ESP32 identified and confirmed
+- [ ] rover_bridge.py running on mini PC
+- [ ] ESP32 successfully connects to bridge on boot
+- [ ] Manual drive command causes wheels to spin
+- [ ] Manual steering command causes servo to move
+
+### Day 4 — End-to-End Bench Test
+- [ ] Webcam feed visible in headset with foveation
+- [ ] Wheel + pedals control rover motors and servo
+- [ ] Total round-trip latency feels driveable
+- [ ] Foveal patch tracks gaze accurately
+
+### Day 5 — Mobile Rover Test
+- [ ] Rover drives untethered on the ground
+- [ ] WiFi range covers expected operating area
+- [ ] Battery lasts at least one full session
+- [ ] Rover can navigate a simple obstacle course (success not required, just attempt)
+
+### Day 6 — Buffer + Stability Pass
+- [ ] System is stable for at least one continuous 15-minute drive session
+- [ ] Documented startup procedure (what to power on first, command order, etc.)
+- [ ] At least one good demo video captured
+
+### Day 7 — Decision Point
+- [ ] **DECISION MADE:** Commit to Rover OR Pivot to Simulation
+
+---
+
+## Phase A.1.5 — Foveation Rendering Verification (Simulation Fallback)
 
 Run these ONCE before any study subjects.
 
 ### Server-Side Verification
 
-- [ ] Start mock_pioneer in venv:
+- [x] Start mock_pioneer in venv:
   ```powershell
   cd mock_pioneer
   ./venv/scripts/activate.ps1
   python server.py --camera-source unity --mode gaze --periph-quality 15 --fovea-quality 85 --show
   ```
-- [ ] `--show` window opens and displays a frame (not blank)
-- [ ] Server startup log prints: `Encoding peripheral at quality 15, foveal at quality 85`
-- [ ] Open `logs/server_session_*.csv` — confirm `bytes_fovea` column is non-zero on most rows
+- [x] `--show` window opens and displays a frame (not blank)
+- [x] Server startup log prints: `Encoding peripheral at quality 15, foveal at quality 85`
+- [x] Open `logs/server_session_*.csv` — confirm `bytes_fovea` column is non-zero on most rows
 
 ### Unity Editor Verification (DesktopFoveated first)
 
-- [ ] Open `DesktopFoveated.unity`, hit Play
-- [ ] Console shows `[CameraFeedReceiver] Connected successfully!`
-- [ ] Canvas shows the camera feed (not blank white)
-- [ ] Move mouse to corner of screen → sharp region follows mouse, opposite corner is pixelated
-- [ ] Press 1 → Uniform: entire canvas same quality (no foveal patch)
-- [ ] Press 2 → Foveated: sharp patch at mouse, periphery pixelated
-- [ ] Press 3 → PeripheralOnly: everything uniformly blurry, no sharp patch
+- [x] Open `DesktopFoveated.unity`, hit Play
+- [x] Console shows `[CameraFeedReceiver] Connected successfully!`
+- [x] Canvas shows the camera feed (not blank white)
+- [x] Move mouse to corner of screen → sharp region follows mouse, opposite corner is pixelated
+- [x] Press 1 → Uniform: entire canvas same quality (no foveal patch)
+- [x] Press 2 → Foveated: sharp patch at mouse, periphery pixelated
+- [x] Press 3 → PeripheralOnly: everything uniformly blurry, no sharp patch
 
 ### VR Headset Verification (ViveFoveated)
 
-- [ ] Vive Streaming Hub on PC shows Focus Vision connected
-- [ ] Open `ViveFoveated.unity`, hit Play
-- [ ] Console shows `[SceneFrameStreamer] Connected successfully.`
-- [ ] Console shows `[CameraFeedReceiver] Connected successfully!`
-- [ ] Console shows `[GazeProvider] OpenXR Eye tracking dynamically detected!`
-- [ ] World-space canvas visible at ~2m distance, readable
-- [ ] Look at CORNER of canvas → corner is sharp, opposite corner is blurry
-- [ ] Look at CENTER → center is sharp, edges are blurry
-- [ ] Effect is driven by EYE gaze, not HEAD direction (turn head but look at same spot — patch stays)
-- [ ] Right thumbstick → capsule moves forward/backward, turns left/right
-- [ ] A button (right controller) → Console shows "Start Trial"
-- [ ] B button (right controller) → Console shows "End Trial | Success: True"
-- [ ] Y button (left controller) → Console shows "End Trial | Success: False"
-- [ ] Open `logs/trial_metrics_*.csv` → confirm rows written with correct fields
+- [x] Vive Streaming Hub on PC shows Focus Vision connected
+- [x] Open `ViveFoveated.unity`, hit Play
+- [x] Console shows `[SceneFrameStreamer] Connected successfully.`
+- [x] Console shows `[CameraFeedReceiver] Connected successfully!`
+- [x] Console shows `[GazeProvider] OpenXR Eye tracking dynamically detected!`
+- [x] World-space canvas visible at ~2m distance, readable
+- [x] Look at CORNER of canvas → corner is sharp, opposite corner is blurry
+- [x] Look at CENTER → center is sharp, edges are blurry
+- [x] Effect is driven by EYE gaze, not HEAD direction (turn head but look at same spot — patch stays)
+- [x] Move robot: Use Right Thumbstick (VR) OR W/A/S/D/Arrow Keys (Keyboard) to drive forward/back and steer left/right
+- [x] Brake robot: Squeeze Right Controller Grip Trigger (VR) OR Spacebar (Keyboard)
+- [x] Reset robot position: Press 'R' on keyboard
+- [x] Switch maps (Scenarios): Press 7, 8, or 9 (OR C, D, O) on keyboard to switch to Corridor, Doorway, or Obstacle scenarios. NOTE: Do NOT use 1, 2, or 3 for maps!
+- [x] A button (right controller) OR F5 (Keyboard) → Console shows "Start Trial"
+- [x] B button (right controller) OR F6 (Keyboard) → Console shows "End Trial | Success: True"
+- [x] Y button (left controller) OR F7 (Keyboard) → Console shows "End Trial | Success: False"
+- [x] Open `logs/trial_metrics_*.csv` → confirm rows written with correct fields
 
 ### Condition Switching (while in VR, assistant presses keyboard)
 
-- [ ] Press 1 → Uniform: canvas uniformly crisp, no foveal effect
-- [ ] Press 2 → Foveated: sharp patch follows eye gaze, periphery pixelated
-- [ ] Press 3 → PeripheralOnly: everything uniformly blurry
+- [x] Press 1 → Uniform: canvas uniformly crisp, no foveal effect
+- [ ] Press 2 → Foveated: sharp patch follows eye gaze, periphery pixelated *(Fix deployed, pending verification)*
+- [x] Press 3 → PeripheralOnly: everything uniformly blurry
 
 ---
 
@@ -200,14 +259,14 @@ Condition order for this subject (from Latin Square sheet):
 
 | Action | Command |
 |--------|---------|
-| Start mock_pioneer (gaze mode) | `python server.py --camera-source unity --mode gaze --periph-quality 15 --fovea-quality 85` |
+| Start mock_pioneer on Mini PC | `python server.py --camera-source rover --camera-index 0 --mode gaze --rover-out` |
 | Switch to Uniform | Press `1` on keyboard |
 | Switch to Foveated | Press `2` on keyboard |
 | Switch to PeripheralOnly | Press `3` on keyboard |
+| Switch Scenarios (If applicable) | Press `7`, `8`, or `9` on keyboard |
+| Keyboard Drive/Steer | Press `W`/`S` (Forward/Backward), `A`/`D` (Steer Left/Right) or Arrow keys |
+| Serafim R1+ Steering | Turn Wheel |
+| Serafim R1+ Gas/Brake | Press Pedals |
 | Start trial (keyboard) | `F5` |
 | End trial success (keyboard) | `F6` |
 | End trial failure (keyboard) | `F7` |
-| Register collision (keyboard) | `F8` |
-| Start trial (VR controller) | A button (right) |
-| End trial success (VR) | B button (right) |
-| End trial failure (VR) | Y button (left) |

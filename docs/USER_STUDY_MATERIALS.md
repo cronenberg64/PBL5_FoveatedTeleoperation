@@ -1,5 +1,7 @@
 # User Study Materials
 
+> **Note**: These materials are for the **Simulation Fallback** plan. If the Real Rover Sprint (1-Week) succeeds, these will be adapted for real-rover trials instead of simulation.
+
 **PBL5 Foveated Teleoperation — Complete Study Package**
 
 Principal Investigator: Jonathan Setiawan, ISSE Undergraduate, Ritsumeikan University

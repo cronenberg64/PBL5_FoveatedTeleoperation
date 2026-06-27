@@ -92,6 +92,20 @@ public class TeleoperationController : MonoBehaviour
         currentBrake = brakeAction.ReadValue<float>();
         currentSteer = steerAction.ReadValue<float>();
 
+        // Fallback for Generic Gamepad / Serafim R1+ (Pedals = Triggers, Wheel = Left Stick X)
+        var gamepad = Gamepad.current;
+        if (gamepad != null)
+        {
+            float gpAccel = gamepad.rightTrigger.ReadValue();
+            if (gpAccel > currentAccel) currentAccel = gpAccel;
+
+            float gpBrake = gamepad.leftTrigger.ReadValue();
+            if (gpBrake > currentBrake) currentBrake = gpBrake;
+
+            float gpSteer = gamepad.leftStick.x.ReadValue();
+            if (Mathf.Abs(gpSteer) > Mathf.Abs(currentSteer)) currentSteer = gpSteer;
+        }
+
         // Apply dead-zones
         if (Mathf.Abs(currentSteer) < steerDeadZone) currentSteer = 0f;
         if (currentAccel < triggerDeadZone) currentAccel = 0f;
@@ -101,6 +115,12 @@ public class TeleoperationController : MonoBehaviour
     private void HandleGearShift()
     {
         bool pressed = gearShiftAction.IsPressed();
+        
+        var gamepad = Gamepad.current;
+        if (gamepad != null && gamepad.buttonSouth.isPressed)
+        {
+            pressed = true;
+        }
 
         // Toggle on rising edge only (de-bounce)
         if (pressed && !gearShiftHeld)

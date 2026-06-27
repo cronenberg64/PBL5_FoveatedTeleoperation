@@ -17,35 +17,37 @@ public class OneShotMerger : EditorWindow
         // Open SimulatedDriving additively
         Scene simScene = EditorSceneManager.OpenScene(simPath, OpenSceneMode.Additive);
 
-        // Find objects in SimulatedDriving
+        // Find WorldRoot in SimulatedDriving
         GameObject[] simRoots = simScene.GetRootGameObjects();
+        GameObject worldRoot = null;
+        foreach (var obj in simRoots)
+        {
+            if (obj.name == "WorldRoot")
+            {
+                worldRoot = obj;
+                break;
+            }
+        }
+
         GameObject scenarioCorridor = null;
         GameObject scenarioDoorway = null;
         GameObject scenarioObstacle = null;
-        GameObject scenarioSelectorObj = null;
 
-        foreach (var obj in simRoots)
+        if (worldRoot != null)
         {
-            if (obj.name == "Scenario_Corridor") scenarioCorridor = obj;
-            if (obj.name == "Scenario_Doorway") scenarioDoorway = obj;
-            if (obj.name == "Scenario_Obstacle") scenarioObstacle = obj;
-            if (obj.name == "ScenarioSelector") scenarioSelectorObj = obj;
+            // Find children inside WorldRoot
+            for (int i = 0; i < worldRoot.transform.childCount; i++)
+            {
+                Transform child = worldRoot.transform.GetChild(i);
+                if (child.name == "Scenario_Corridor") scenarioCorridor = child.gameObject;
+                if (child.name == "Scenario_Doorway") scenarioDoorway = child.gameObject;
+                if (child.name == "Scenario_Obstacle") scenarioObstacle = child.gameObject;
+            }
         }
-
-        // Copy them to ViveFoveated
-        if (scenarioCorridor != null) SceneManager.MoveGameObjectToScene(Instantiate(scenarioCorridor), viveScene);
-        if (scenarioDoorway != null) SceneManager.MoveGameObjectToScene(Instantiate(scenarioDoorway), viveScene);
-        if (scenarioObstacle != null) SceneManager.MoveGameObjectToScene(Instantiate(scenarioObstacle), viveScene);
-        
-        GameObject newSelectorObj = null;
-        if (scenarioSelectorObj != null)
+        else
         {
-            newSelectorObj = Instantiate(scenarioSelectorObj);
-            SceneManager.MoveGameObjectToScene(newSelectorObj, viveScene);
+            Debug.LogError("[OneShotMerger] Could not find WorldRoot in SimulatedDriving scene!");
         }
-
-        // Close SimulatedDriving
-        EditorSceneManager.CloseScene(simScene, true);
 
         // Now find the new objects in ViveFoveated to wire them up
         GameObject[] viveRoots = viveScene.GetRootGameObjects();
@@ -56,14 +58,68 @@ public class OneShotMerger : EditorWindow
         TrialMetricsLogger logger = null;
         RobotController robotController = null;
 
+        // First pass: cleanup any old objects from previous merges
         foreach (var obj in viveRoots)
         {
-            if (obj.name.Contains("Scenario_Corridor")) { newCorridor = obj; newCorridor.name = "Scenario_Corridor"; }
-            if (obj.name.Contains("Scenario_Doorway")) { newDoorway = obj; newDoorway.name = "Scenario_Doorway"; }
-            if (obj.name.Contains("Scenario_Obstacle")) { newObstacle = obj; newObstacle.name = "Scenario_Obstacle"; }
-            if (obj.name.Contains("ScenarioSelector")) { selector = obj.GetComponent<ScenarioSelector>(); obj.name = "ScenarioSelector"; }
-            if (obj.name.Contains("TrialMetricsLogger")) { logger = obj.GetComponent<TrialMetricsLogger>(); }
-            if (obj.name.Contains("InputManager")) { robotController = obj.GetComponent<RobotController>(); }
+            if (obj.name == "Scenario_Corridor" && scenarioCorridor != null) { DestroyImmediate(obj); continue; }
+            if (obj.name == "Scenario_Doorway" && scenarioDoorway != null) { DestroyImmediate(obj); continue; }
+            if (obj.name == "Scenario_Obstacle" && scenarioObstacle != null) { DestroyImmediate(obj); continue; }
+            if (obj.name == "ScenarioSelector") { DestroyImmediate(obj); continue; }
+        }
+
+        // Re-fetch root objects after cleanup
+        viveRoots = viveScene.GetRootGameObjects();
+
+        // Copy them to ViveFoveated as root objects
+        if (scenarioCorridor != null)
+        {
+            newCorridor = Instantiate(scenarioCorridor);
+            newCorridor.name = "Scenario_Corridor";
+            newCorridor.transform.SetParent(null);
+            SceneManager.MoveGameObjectToScene(newCorridor, viveScene);
+        }
+        if (scenarioDoorway != null)
+        {
+            newDoorway = Instantiate(scenarioDoorway);
+            newDoorway.name = "Scenario_Doorway";
+            newDoorway.transform.SetParent(null);
+            SceneManager.MoveGameObjectToScene(newDoorway, viveScene);
+        }
+        if (scenarioObstacle != null)
+        {
+            newObstacle = Instantiate(scenarioObstacle);
+            newObstacle.name = "Scenario_Obstacle";
+            newObstacle.transform.SetParent(null);
+            SceneManager.MoveGameObjectToScene(newObstacle, viveScene);
+        }
+        
+        // Create the ScenarioSelector GameObject
+        GameObject selectorObj = new GameObject("ScenarioSelector");
+        selector = selectorObj.AddComponent<ScenarioSelector>();
+        SceneManager.MoveGameObjectToScene(selectorObj, viveScene);
+
+        // Close SimulatedDriving
+        EditorSceneManager.CloseScene(simScene, true);
+
+        // Find existing components in ViveFoveated
+        viveRoots = viveScene.GetRootGameObjects();
+        foreach (var obj in viveRoots)
+        {
+            if (obj.name == "TrialMetricsLogger") logger = obj.GetComponent<TrialMetricsLogger>();
+            if (obj.name == "InputManager") 
+            {
+                robotController = obj.GetComponent<RobotController>();
+                // Fix InputManager so it doesn't fall through floor and can trigger trial ends
+                obj.tag = "Player";
+                var collider = obj.GetComponent<CapsuleCollider>();
+                if (collider == null)
+                {
+                    collider = obj.AddComponent<CapsuleCollider>();
+                    collider.height = 2f;
+                    collider.radius = 0.5f;
+                    collider.center = new Vector3(0, 1, 0);
+                }
+            }
         }
 
         // Wire up ScenarioSelector
@@ -74,12 +130,20 @@ public class OneShotMerger : EditorWindow
             selector.scenarioObstacle = newObstacle;
             selector.robotController = robotController;
         }
+        else
+        {
+            Debug.LogError("[OneShotMerger] ScenarioSelector component not found!");
+        }
 
         // Wire up TrialMetricsLogger
         if (logger != null)
         {
             logger.scenarioSelector = selector;
             logger.robotController = robotController;
+        }
+        else
+        {
+            Debug.LogError("[OneShotMerger] TrialMetricsLogger component not found!");
         }
 
         // Remove old ground plane since scenarios have ground
@@ -92,6 +156,6 @@ public class OneShotMerger : EditorWindow
         }
 
         EditorSceneManager.SaveScene(viveScene);
-        Debug.Log("Successfully merged SimulatedDriving scenarios into ViveFoveated!");
+        Debug.Log("Successfully merged SimulatedDriving scenarios into ViveFoveated and fixed colliders!");
     }
 }

@@ -61,9 +61,11 @@ public class CameraFeedReceiver : MonoBehaviour
     private float _bytesReceivedAccumulator = 0f;
     private float _bandwidthTimer = 0f;
 
-    // Public properties
     public float BandwidthBytesPerSec => _bandwidthBytesPerSec;
     public float LatencyMs => _lastDecodeMs;
+
+    public Texture2D FoveaTex => _foveaTex;
+    public RectInt CropRect { get; private set; }
 
     private TcpClient tcpClient;
     private Thread receiveThread;
@@ -89,7 +91,7 @@ public class CameraFeedReceiver : MonoBehaviour
         {
             PeriphJpeg = periph; FoveaJpeg = fovea;
             CropX = x; CropY = y; CropW = w; CropH = h;
-            ReceivedMs = ms; TotalBytes = periph.Length + fovea.Length + 16;
+            ReceivedMs = ms; TotalBytes = (periph?.Length ?? 0) + (fovea?.Length ?? 0) + 16;
         }
     }
 
@@ -121,6 +123,14 @@ public class CameraFeedReceiver : MonoBehaviour
             _foveaTex = new Texture2D(2, 2, TextureFormat.RGB24, false);
 
         feedDisplay.texture = _periphTex;
+
+        // Dynamically add an AspectRatioFitter to prevent stretching/zooming
+        var fitter = feedDisplay.gameObject.GetComponent<AspectRatioFitter>();
+        if (fitter == null)
+        {
+            fitter = feedDisplay.gameObject.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+        }
 
         cts = new CancellationTokenSource();
         receiveThread = new Thread(() => ReceiveLoop(cts.Token));
@@ -190,7 +200,15 @@ public class CameraFeedReceiver : MonoBehaviour
         long decodeStart = Stopwatch.GetTimestamp();
         if (_periphTex.LoadImage(latest.JpegData))
         {
+            CropRect = new RectInt(0, 0, 0, 0); // No crop in uniform mode
             feedDisplay.texture = _periphTex;
+
+            var fitter = feedDisplay.GetComponent<AspectRatioFitter>();
+            if (fitter != null && _periphTex.height > 0)
+            {
+                fitter.aspectRatio = (float)_periphTex.width / _periphTex.height;
+            }
+
             framesReceived++;
             double decodeMs = (Stopwatch.GetTimestamp() - decodeStart) * 1000.0 / Stopwatch.Frequency;
             _lastDecodeMs = (float)decodeMs;
@@ -215,12 +233,23 @@ public class CameraFeedReceiver : MonoBehaviour
             }
             if (_foveaTex.LoadImage(latest.FoveaJpeg))
             {
-                // 3. Blit foveal patch onto periphery at server's recorded crop coords.
-                BlitFoveaOntoBase(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
+                // Expose the crop rect for the shader to use
+                CropRect = new RectInt(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
+                
+                // We no longer blit the fovea onto the base texture here.
+                // The FoveatedFeed shader composite them smoothly instead.
+                // BlitFoveaOntoBase(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
             }
         }
 
         feedDisplay.texture = _periphTex;
+        
+        var fitter = feedDisplay.GetComponent<AspectRatioFitter>();
+        if (fitter != null && _periphTex.height > 0)
+        {
+            fitter.aspectRatio = (float)_periphTex.width / _periphTex.height;
+        }
+
         framesReceived++;
 
         double decodeMs = (Stopwatch.GetTimestamp() - decodeStart) * 1000.0 / Stopwatch.Frequency;

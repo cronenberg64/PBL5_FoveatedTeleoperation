@@ -70,7 +70,7 @@ _current_mode: str = "uniform"
 _current_quality: int = 20
 _current_periph_quality: int = 15
 _current_fovea_quality: int = 85
-_current_fovea_size: int = 200
+_current_fovea_size: int = 300
 
 # Thread-safe queue for passing frames to the main thread for display (macOS requirement)
 _preview_queue = queue.Queue(maxsize=1)
@@ -243,8 +243,24 @@ def _handle_cfg(line: str) -> None:
         
     print(f"[Control] Runtime config updated: mode={mode_str}, pq={pq}, fq={fq}")
 
+_rover_out_sock = None
 
-def control_thread(stop_event: threading.Event) -> None:
+def _connect_rover_out():
+    global _rover_out_sock
+    while True:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect(("127.0.0.1", 1238))
+            _rover_out_sock = s
+            print("[Control] Connected to rover_bridge on port 1238")
+            break
+        except Exception:
+            time.sleep(2)
+
+def control_thread(stop_event: threading.Event, use_rover_out: bool) -> None:
+    if use_rover_out:
+        threading.Thread(target=_connect_rover_out, daemon=True).start()
+
     server_sock = _make_server_socket(1234)
     server_sock.settimeout(1.0)
     while not stop_event.is_set():
@@ -270,6 +286,16 @@ def control_thread(stop_event: threading.Event) -> None:
                         cmd, turn, speed = _parse_control(line)
                         ts = time.time()
                         print(f"[Control] t={ts:.3f}  cmd={cmd}  turn={turn}  speed={speed}")
+                        
+                        global _rover_out_sock
+                        if _rover_out_sock:
+                            try:
+                                _rover_out_sock.sendall(f"${cmd}{turn:03d}{speed:03d}\n".encode('ascii'))
+                            except Exception as e:
+                                print(f"[Control] Failed to send to rover_bridge: {e}")
+                                _rover_out_sock = None
+                                threading.Thread(target=_connect_rover_out, daemon=True).start()
+                                
                         with _config_lock:
                             mode_lbl = _current_mode
                         if _metrics:
@@ -678,9 +704,9 @@ def main() -> None:
     parser.add_argument(
         "--fovea-size",
         type=int,
-        default=200,
+        default=300,
         metavar="PX",
-        help="Gaze mode: side length of the square foveal crop in pixels (default: 200).",
+        help="Gaze mode: foveal square crop size in pixels (default: 300).",
     )
     parser.add_argument(
         "--log-dir",
@@ -716,6 +742,9 @@ def main() -> None:
         action="store_true",
         help="If true, flip the camera frames horizontally (cv2.flip(frame, 1)) to handle inverted mounts.",
     )
+    parser.add_argument("--metrics-off", action="store_true", help="Disable logging completely")
+    parser.add_argument("--rover-out", action="store_true", help="Forward drive commands to local port 1238 (rover_bridge.py)")
+
     args = parser.parse_args()
 
     # Startup validation check for rover camera
@@ -774,7 +803,7 @@ def main() -> None:
     stop_event = threading.Event()
 
     threads = [
-        threading.Thread(target=control_thread, args=(stop_event,), name="ControlThread", daemon=True),
+        threading.Thread(target=control_thread, args=(stop_event, args.rover_out), name="ControlThread", daemon=True),
         threading.Thread(target=gaze_thread,    args=(stop_event,), name="GazeThread",    daemon=True),
         threading.Thread(
             target=camera_thread,

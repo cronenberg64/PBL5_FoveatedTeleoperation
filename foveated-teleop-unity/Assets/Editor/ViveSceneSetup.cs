@@ -51,12 +51,13 @@ public class ViveSceneSetup
         Canvas canvas = canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         canvasObj.layer = LayerMask.NameToLayer("UI");
+        canvasObj.AddComponent<VRCanvasAdjuster>();
         
         RectTransform canvasRect = canvas.GetComponent<RectTransform>();
-        canvasRect.localPosition = new Vector3(0, 0, 2.0f); // 2m in front
+        canvasRect.localPosition = new Vector3(0, 0, 1.2f); // 1.2m in front
         canvasRect.localRotation = Quaternion.identity;
-        // 2.3m x 1.3m
-        canvasRect.sizeDelta = new Vector2(2.3f, 1.3f);
+        // 3.0m x 1.7m (closer and much larger)
+        canvasRect.sizeDelta = new Vector2(3.0f, 1.7f);
         canvasRect.localScale = Vector3.one;
 
         // 4. Raw Image
@@ -143,6 +144,7 @@ public class ViveSceneSetup
         soFov.ApplyModifiedProperties();
 
         GameObject inputObj = new GameObject("InputManager");
+        inputObj.tag = "Player"; // Tag as Player so triggers detect it
         // Position capsule slightly in front of origin at floor level
         inputObj.transform.position = new Vector3(0f, 0.5f, -3f);
         // Add Rigidbody so RobotController.FixedUpdate can apply velocity
@@ -150,6 +152,13 @@ public class ViveSceneSetup
         rb.constraints = RigidbodyConstraints.FreezePositionY
                        | RigidbodyConstraints.FreezeRotationX
                        | RigidbodyConstraints.FreezeRotationZ;
+        
+        // Add CapsuleCollider so trigger zones can detect entering/exiting
+        var col = inputObj.AddComponent<CapsuleCollider>();
+        col.center = Vector3.zero;
+        col.radius = 0.5f;
+        col.height = 2.0f;
+
         // Add RobotController
         inputObj.AddComponent<RobotController>();
         // Add ConditionController

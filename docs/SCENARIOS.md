@@ -1,5 +1,7 @@
 # Navigation Experiment Scenarios
 
+> **Note**: These scenarios are currently framed for the **Simulation Fallback** plan. If the Real Rover Sprint (1-Week) succeeds, these will be adapted for physical, real-world obstacles and doorways.
+
 These scenarios are designed to evaluate the "Drivability" of the robot under different streaming conditions (Uniform vs. Foveated).
 
 ## General Metrics for All Scenarios

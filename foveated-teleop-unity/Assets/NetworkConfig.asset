@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee60d8e1241fb2a478daf25980a80ce6, type: 3}
   m_Name: NetworkConfig
   m_EditorClassIdentifier: Assembly-CSharp::NetworkConfig
-  robotIP: 127.0.0.1
+  robotIP: 192.168.0.208
   controlPort: 1234
   cameraPort: 1235
   gazePort: 1236

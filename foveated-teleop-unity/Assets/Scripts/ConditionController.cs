@@ -152,6 +152,13 @@ public class ConditionController : MonoBehaviour
                 pendingCommand = msg;
             }
         }
+
+        // Also update the local shader so the circle only appears in Foveated mode
+        FoveatedFeedController ffc = FindAnyObjectByType<FoveatedFeedController>();
+        if (ffc != null)
+        {
+            ffc.SetFoveationEnabled(c == Condition.Foveated_15_85);
+        }
     }
 
     private void ConnectionLoop(CancellationToken token)

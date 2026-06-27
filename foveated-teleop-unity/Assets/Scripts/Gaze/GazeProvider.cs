@@ -143,12 +143,29 @@ public class GazeProvider : MonoBehaviour
         {
             if (!isEyeTrackingActive)
             {
-                var devices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
-                UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(UnityEngine.XR.InputDeviceCharacteristics.EyeTracking, devices);
-                if (devices.Count > 0)
+                // First try HTC Vive Helper
+                Vector3 dummyPos;
+                Quaternion dummyRot;
+                try
                 {
-                    isEyeTrackingActive = true;
-                    Debug.Log("[GazeProvider] OpenXR Eye tracking dynamically detected!");
+                    if (ViveGazeHelper.TryGetGaze(out dummyPos, out dummyRot))
+                    {
+                        isEyeTrackingActive = true;
+                        Debug.Log("[GazeProvider] OpenXR Eye tracking dynamically detected via ViveGazeHelper!");
+                    }
+                }
+                catch { }
+
+                // Fallback to standard Unity XR check
+                if (!isEyeTrackingActive)
+                {
+                    var devices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
+                    UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(UnityEngine.XR.InputDeviceCharacteristics.EyeTracking, devices);
+                    if (devices.Count > 0)
+                    {
+                        isEyeTrackingActive = true;
+                        Debug.Log("[GazeProvider] OpenXR Eye tracking dynamically detected via Unity InputDevices!");
+                    }
                 }
             }
 
@@ -268,12 +285,27 @@ public class GazeProvider : MonoBehaviour
 #endif
         if (gazeMode == GazeMode.OpenXR)
         {
+            // First try HTC Vive Helper
+            Vector3 dummyPos;
+            Quaternion dummyRot;
+            try
+            {
+                if (ViveGazeHelper.TryGetGaze(out dummyPos, out dummyRot))
+                {
+                    isEyeTrackingActive = true;
+                    Debug.Log("[GazeProvider] OpenXR Eye tracking is available via ViveGazeHelper.");
+                    return;
+                }
+            }
+            catch { }
+
+            // Fallback to standard Unity XR check
             var devices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
             UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(UnityEngine.XR.InputDeviceCharacteristics.EyeTracking, devices);
             if (devices.Count > 0)
             {
                 isEyeTrackingActive = true;
-                Debug.Log("[GazeProvider] OpenXR Eye tracking is available.");
+                Debug.Log("[GazeProvider] OpenXR Eye tracking is available via Unity InputDevices.");
                 return;
             }
         }
@@ -405,48 +437,73 @@ public class GazeProvider : MonoBehaviour
 
     private Ray GetOpenXREyeTrackingRay()
     {
-        var devices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
-        UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(UnityEngine.XR.InputDeviceCharacteristics.EyeTracking, devices);
-        if (devices.Count > 0)
+        Vector3 position = Vector3.zero;
+        Quaternion rotation = Quaternion.identity;
+
+        // 1. First, try HTC VIVE's specific API via the helper (if compiled)
+        // This is necessary because VIVE's OpenXR extension sometimes doesn't populate eyesData correctly.
+        try
         {
-            var eyeDevice = devices[0];
-            Vector3 position = Vector3.zero;
-            Quaternion rotation = Quaternion.identity;
-
-            // 1. Try standard eyesData first
-            if (eyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.eyesData, out UnityEngine.XR.Eyes eyes))
+            if (ViveGazeHelper.TryGetGaze(out position, out rotation))
             {
-                Vector3 leftPos = Vector3.zero;
-                Vector3 rightPos = Vector3.zero;
-                Quaternion leftRot = Quaternion.identity;
-                Quaternion rightRot = Quaternion.identity;
-
-                bool hasLeft = eyes.TryGetLeftEyePosition(out leftPos) && eyes.TryGetLeftEyeRotation(out leftRot);
-                bool hasRight = eyes.TryGetRightEyePosition(out rightPos) && eyes.TryGetRightEyeRotation(out rightRot);
-
-                if (hasLeft && hasRight)
+                if (Time.frameCount % 60 == 0)
                 {
-                    position = (leftPos + rightPos) * 0.5f;
-                    Vector3 direction = ((leftRot * Vector3.forward) + (rightRot * Vector3.forward)).normalized;
-                    return TransformRayToWorld(position, direction);
+                    Debug.Log($"[GazeDebug] ViveGazeHelper returned Pos: {position}, Rot: {rotation.eulerAngles}. Local Dir: {rotation * Vector3.forward}");
                 }
-                else if (hasLeft)
-                {
-                    return TransformRayToWorld(leftPos, leftRot * Vector3.forward);
-                }
-                else if (hasRight)
-                {
-                    return TransformRayToWorld(rightPos, rightRot * Vector3.forward);
-                }
-            }
-
-            // 2. Fallback to devicePosition and deviceRotation (used by OVR/Meta OpenXR mapping)
-            if (eyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.devicePosition, out position) &&
-                eyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.deviceRotation, out rotation))
-            {
+                
+                // Let's assume the data is in Tracking Space (relative to XR Origin) like standard OpenXR
                 return TransformRayToWorld(position, rotation * Vector3.forward);
             }
         }
+        catch { /* Helper might not be available */ }
+
+        var devices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
+        UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(UnityEngine.XR.InputDeviceCharacteristics.EyeTracking, devices);
+        
+        if (devices.Count > 0)
+        {
+            foreach (var eyeDevice in devices)
+            {
+                // 2. Try standard eyesData
+                if (eyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.eyesData, out UnityEngine.XR.Eyes eyes))
+                {
+                    Vector3 leftPos = Vector3.zero;
+                    Vector3 rightPos = Vector3.zero;
+                    Quaternion leftRot = Quaternion.identity;
+                    Quaternion rightRot = Quaternion.identity;
+
+                    bool hasLeft = eyes.TryGetLeftEyePosition(out leftPos) && eyes.TryGetLeftEyeRotation(out leftRot);
+                    bool hasRight = eyes.TryGetRightEyePosition(out rightPos) && eyes.TryGetRightEyeRotation(out rightRot);
+
+                    if (hasLeft && hasRight)
+                    {
+                        position = (leftPos + rightPos) * 0.5f;
+                        Vector3 direction = ((leftRot * Vector3.forward) + (rightRot * Vector3.forward)).normalized;
+                        return TransformRayToWorld(position, direction);
+                    }
+                    else if (hasLeft)
+                    {
+                        return TransformRayToWorld(leftPos, leftRot * Vector3.forward);
+                    }
+                    else if (hasRight)
+                    {
+                        return TransformRayToWorld(rightPos, rightRot * Vector3.forward);
+                    }
+                }
+
+                // 3. Fallback to devicePosition and deviceRotation
+                // HTC Vive sometimes incorrectly returns head rotation if eye tracking is disabled in Vive Console.
+                // But we must allow it if it's the only option.
+                if (eyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.devicePosition, out position) &&
+                    eyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.deviceRotation, out rotation))
+                {
+                    // To prevent it from perfectly locking to the center of the screen if it returns pure head rotation,
+                    // we'll still return it, but log a warning if it perfectly matches the head.
+                    return TransformRayToWorld(position, rotation * Vector3.forward);
+                }
+            }
+        }
+
         return GetHeadGazeRay();
     }
 
