@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: NetworkConfig
   m_EditorClassIdentifier: Assembly-CSharp::NetworkConfig
   robotIP: 192.168.0.208
-  controlPort: 1234
+  controlPort: 1239
   cameraPort: 1235
   gazePort: 1236
   neutralTurn: 90

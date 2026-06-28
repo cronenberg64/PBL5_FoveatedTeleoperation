@@ -3,20 +3,31 @@ import threading
 import argparse
 import time
 
-def send_to_esp32(esp_ip, esp_port, cmd_str):
-    # This is a placeholder for the actual ESP32 connection.
-    # We will connect and send the command.
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(1.0)
-        s.connect((esp_ip, esp_port))
-        s.sendall(cmd_str.encode('ascii'))
-        s.close()
-    except Exception as e:
-        print(f"[Bridge] Failed to send to ESP32: {e}")
+esp32_conn = None
+esp32_lock = threading.Lock()
 
-def handle_client(conn, addr, esp_ip, esp_port):
-    print(f"[Bridge] Connected to server.py at {addr}")
+def esp32_listener(port):
+    global esp32_conn
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("0.0.0.0", port))
+    server.listen(1)
+    print(f"[Bridge] Listening for ESP32 on port {port}...")
+    
+    while True:
+        try:
+            conn, addr = server.accept()
+            print(f"[Bridge] ESP32 CONNECTED from {addr}!")
+            with esp32_lock:
+                if esp32_conn:
+                    try: esp32_conn.close()
+                    except: pass
+                esp32_conn = conn
+        except Exception as e:
+            print(f"[Bridge] ESP32 accept error: {e}")
+
+def handle_server_py(conn, addr):
+    global esp32_conn
+    print(f"[Bridge] server.py connected from {addr}")
     try:
         while True:
             data = conn.recv(1024)
@@ -25,47 +36,65 @@ def handle_client(conn, addr, esp_ip, esp_port):
             
             lines = data.decode('ascii').splitlines()
             for line in lines:
-                if not line:
+                if not line.startswith('$') or len(line) < 8:
                     continue
-                # Line format from server.py: $cTTTSSS (e.g. $1090256)
-                print(f"[Bridge] Received from mock_pioneer: {line}")
                 
-                # Here we could translate it to the ESP32's specific motor format.
-                # For now, we forward the raw string or a basic translation.
-                # Example: CMD1090256
-                translated_cmd = line.replace("$", "CMD") + "\n"
+                print(f"[Bridge] Received from server.py: {line}")
                 
-                if esp_ip:
-                    send_to_esp32(esp_ip, esp_port, translated_cmd)
-                else:
-                    print(f"[Bridge] (Dry Run) Would send to ESP32: {translated_cmd.strip()}")
-                
+                try:
+                    cmd_char = line[1]
+                    turn = int(line[2:5])
+                    speed = int(line[5:8])
+                    
+                    servo = int(30 + (turn / 999.0) * 120)
+                    if cmd_char == '1': # Forward
+                        mtr = 255 + min(speed * 200 // 255, 200)
+                    elif cmd_char == '2': # Reverse
+                        mtr = 255 - min(speed * 200 // 255, 200)
+                    else: # Stop
+                        mtr = 255
+                        
+                    translated_cmd = f"CMD{servo:03d}{mtr:03d}\n"
+                    
+                    with esp32_lock:
+                        if esp32_conn:
+                            try:
+                                esp32_conn.sendall(translated_cmd.encode('ascii'))
+                                print(f"[Bridge] Sent to ESP32: {translated_cmd.strip()}")
+                            except Exception as e:
+                                print(f"[Bridge] Lost ESP32 connection: {e}")
+                                esp32_conn.close()
+                                esp32_conn = None
+                        else:
+                            print(f"[Bridge] Waiting for ESP32 to connect... (would send {translated_cmd.strip()})")
+                except ValueError:
+                    pass
     except Exception as e:
         print(f"[Bridge] Connection error: {e}")
     finally:
         conn.close()
 
 def main():
-    parser = argparse.ArgumentParser(description="Bridge between mock_pioneer and the real ESP32 rover.")
-    parser.add_argument("--port", type=int, default=1238, help="Port to listen for mock_pioneer")
-    parser.add_argument("--esp-ip", type=str, default="", help="IP address of the ESP32 (leave blank for dry run)")
-    parser.add_argument("--esp-port", type=int, default=80, help="TCP port of the ESP32")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--listen-server", type=int, default=1238, help="Port to listen for server.py")
+    parser.add_argument("--listen-esp", type=int, default=1234, help="Port to listen for ESP32")
     args = parser.parse_args()
     
+    # Start ESP32 listener thread
+    t = threading.Thread(target=esp32_listener, args=(args.listen_esp,), daemon=True)
+    t.start()
+    
+    # Listen for server.py
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_sock.bind(("0.0.0.0", args.port))
+    server_sock.bind(("0.0.0.0", args.listen_server))
     server_sock.listen(1)
     
-    print(f"[Bridge] Listening for mock_pioneer on port {args.port}...")
-    if not args.esp_ip:
-        print("[Bridge] No ESP32 IP provided. Running in dry-run mode (will only print commands).")
-    else:
-        print(f"[Bridge] Will forward commands to ESP32 at {args.esp_ip}:{args.esp_port}")
-        
+    print(f"[Bridge] Listening for server.py on port {args.listen_server}...")
+    
     try:
         while True:
             conn, addr = server_sock.accept()
-            t = threading.Thread(target=handle_client, args=(conn, addr, args.esp_ip, args.esp_port), daemon=True)
+            t = threading.Thread(target=handle_server_py, args=(conn, addr), daemon=True)
             t.start()
     except KeyboardInterrupt:
         print("\n[Bridge] Shutting down.")

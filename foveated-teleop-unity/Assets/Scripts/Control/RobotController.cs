@@ -16,6 +16,7 @@ public class RobotController : MonoBehaviour
 #endif
 
     private Rigidbody rb;
+    private RobotClient robotClient;
     private Vector3 spawnPosition = new Vector3(0f, 1f, -2f);
     private Quaternion spawnRotation = Quaternion.identity;
 
@@ -35,6 +36,7 @@ public class RobotController : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        robotClient = GetComponent<RobotClient>();
         // Freeze Y position and X/Z rotation to satisfy the requirements
         if (rb != null)
         {
@@ -213,6 +215,35 @@ public class RobotController : MonoBehaviour
         // Clamp inputs to ensure they don't exceed standard limits (additive movement)
         moveInput = Mathf.Clamp(moveInput, -1f, 1f);
         turnInput = Mathf.Clamp(turnInput, -1f, 1f);
+
+        // ---- Send to physical robot ----
+        if (robotClient != null && robotClient.IsConnected)
+        {
+            int neutralTurn = 90;
+            int neutralSpeed = 256;
+
+            int turn = Mathf.RoundToInt(neutralTurn + turnInput * neutralTurn);
+            turn = Mathf.Clamp(turn, 0, 180);
+
+            int speed = Mathf.RoundToInt(neutralSpeed + Mathf.Abs(moveInput) * neutralSpeed);
+            speed = Mathf.Clamp(speed, 0, 512);
+
+            int cmd = 0;
+            if (Mathf.Approximately(moveInput, 0f) && Mathf.Approximately(turnInput, 0f))
+            {
+                cmd = 0;
+            }
+            else if (moveInput >= 0f)
+            {
+                cmd = 1;
+            }
+            else
+            {
+                cmd = 2;
+            }
+
+            robotClient.SendDriveCommand(cmd, turn, speed);
+        }
 
         // Move forward/backward along local Z axis
         Vector3 targetVelocity = transform.forward * moveInput * moveSpeed;
