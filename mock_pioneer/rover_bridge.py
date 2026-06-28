@@ -47,13 +47,19 @@ def handle_server_py(conn, addr):
                     speed = int(line[5:8])
                     
                     servo = int(30 + (turn / 999.0) * 120)
+                    
+                    # Convert Unity speed (0-512, neutral 256) to throttle magnitude
+                    throttle = (speed - 256) * (200.0 / 256.0)
+                    
                     if cmd_char == '1': # Forward
-                        mtr = 255 + min(speed * 200 // 255, 200)
+                        mtr = int(255 + throttle)
                     elif cmd_char == '2': # Reverse
-                        mtr = 255 - min(speed * 200 // 255, 200)
+                        mtr = int(255 - throttle)
                     else: # Stop
                         mtr = 255
                         
+                    mtr = max(55, min(455, mtr)) # Clamp to ESP32 range
+                    
                     translated_cmd = f"CMD{servo:03d}{mtr:03d}\n"
                     
                     with esp32_lock:

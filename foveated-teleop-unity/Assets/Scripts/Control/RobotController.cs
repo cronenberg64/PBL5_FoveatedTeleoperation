@@ -183,6 +183,14 @@ public class RobotController : MonoBehaviour
                 steerVal = gamepadSteerAction.ReadValue<float>();
             }
 
+            // Fallback for Generic Gamepad / Serafim R1+
+            var gamepad = Gamepad.current;
+            if (gamepad != null)
+            {
+                float gpSteer = gamepad.leftStick.x.ReadValue();
+                if (Mathf.Abs(gpSteer) > Mathf.Abs(steerVal)) steerVal = gpSteer;
+            }
+
             // Apply deadzone for centering jitter from wheel's hall sensors
             if (Mathf.Abs(steerVal) > 0.05f)
             {
@@ -192,6 +200,15 @@ public class RobotController : MonoBehaviour
             // Pedals
             float gasVal = gamepadGasAction != null ? gamepadGasAction.ReadValue<float>() : 0f;
             float brakeVal = gamepadBrakeAction != null ? gamepadBrakeAction.ReadValue<float>() : 0f;
+            
+            if (gamepad != null)
+            {
+                float gpAccel = gamepad.rightTrigger.ReadValue();
+                if (gpAccel > gasVal) gasVal = gpAccel;
+
+                float gpBrake = gamepad.leftTrigger.ReadValue();
+                if (gpBrake > brakeVal) brakeVal = gpBrake;
+            }
             
             if (gasVal > 0.05f) moveInput += gasVal;
             if (brakeVal > 0.05f) moveInput -= brakeVal;
