@@ -278,10 +278,10 @@ Window should open showing the webcam feed. If not, try indices 1, 2, etc.
 - Confirm: workstation displays webcam feed from mini PC, foveation works with mouse gaze (use mouse proxy first, then test with headset)
 
 **Acceptance criteria for Day 2:**
-- [ ] Mini PC running mock_pioneer, accessible from workstation over LAN
-- [ ] Webcam feed visible in Unity on workstation
-- [ ] Foveation works end-to-end across the network
-- [ ] Latency feels tolerable for driving (subjective — should be obviously responsive)
+- [x] Mini PC running mock_pioneer, accessible from workstation over LAN
+- [x] Webcam feed visible in Unity on workstation
+- [x] Foveation works end-to-end across the network
+- [x] Latency feels tolerable for driving (subjective — should be obviously responsive)
 
 ---
 
@@ -380,11 +380,11 @@ Acceptance:
 - **Motors should physically spin.** This is the moment of truth for hardware integration.
 
 **Acceptance criteria for Day 3:**
-- [ ] Active ESP32 identified and confirmed
-- [ ] rover_bridge.py running on mini PC
-- [ ] ESP32 successfully connects to bridge on boot
-- [ ] Manual drive command causes wheels to spin
-- [ ] Manual steering command causes servo to move
+- [x] Active ESP32 identified and confirmed
+- [x] rover_bridge.py running on mini PC
+- [x] ESP32 successfully connects to bridge on boot
+- [ ] Manual drive command causes wheels to spin *(Pending physical wire soldering!)*
+- [ ] Manual steering command causes servo to move *(Pending battery XT60 plug connection!)*
 
 ---
 
@@ -654,9 +654,9 @@ Update this table each evening:
 
 | Day | Acceptance Met | Carry-over to next day | Notes |
 |---|---|---|---|
-| 1 | ☐ | | |
-| 2 | ☐ | | |
-| 3 | ☐ | | |
+| 1 | [x] | | |
+| 2 | [x] | | |
+| 3 | [/] | Physical Motor Soldering | Software & Network 100% complete! |
 | 4 | ☐ | | |
 | 5 | ☐ | | |
 | 6 | ☐ | | |

@@ -11,8 +11,8 @@
 | Day | Task Focus | Acceptance Met | Carry-over / Notes |
 |---|---|---|---|
 | 1 | Workstation Input + Foveation Fix | [x] | Pedals bypassed, mapped to keyboard W/S |
-| 2 | Mini PC Setup + Network Plumbing | ☐ | Mini PC connected to VINE5 Wi-Fi. IP must be set to 192.168.0.208 |
-| 3 | rover_bridge.py + ESP32 Connection | ☐ | |
+| 2 | Mini PC Setup + Network Plumbing | [x] | Network static IPs verified, TCP connection stable |
+| 3 | rover_bridge.py + ESP32 Connection | [/] | Software is perfect; pending physical wire soldering for DC motor |
 | 4 | End-to-End Bench Test | ☐ | |
 | 5 | Mobile Rover Test | ☐ | |
 | 6 | Buffer + Stability Pass | ☐ | |
@@ -26,17 +26,17 @@
 - [x] Keyboard fallback still works for debugging
 
 ### Day 2 — Mini PC Setup + Network Plumbing
-- [ ] Mini PC running mock_pioneer, accessible from workstation over LAN
-- [ ] Webcam feed visible in Unity on workstation
-- [ ] Foveation works end-to-end across the network
-- [ ] Latency feels tolerable for driving (subjective)
+- [x] Mini PC running mock_pioneer, accessible from workstation over LAN
+- [x] Webcam feed visible in Unity on workstation
+- [x] Foveation works end-to-end across the network
+- [x] Latency feels tolerable for driving (subjective)
 
 ### Day 3 — rover_bridge.py + ESP32 Connection
-- [ ] Active ESP32 identified and confirmed
-- [ ] rover_bridge.py running on mini PC
-- [ ] ESP32 successfully connects to bridge on boot
-- [ ] Manual drive command causes wheels to spin
-- [ ] Manual steering command causes servo to move
+- [x] Active ESP32 identified and confirmed
+- [x] rover_bridge.py running on mini PC
+- [x] ESP32 successfully connects to bridge on boot
+- [ ] Manual drive command causes wheels to spin *(Pending physical motor wire splicing!)*
+- [ ] Manual steering command causes servo to move *(Pending XT60 battery plug!)*
 
 ### Day 4 — End-to-End Bench Test
 - [ ] Webcam feed visible in headset with foveation
