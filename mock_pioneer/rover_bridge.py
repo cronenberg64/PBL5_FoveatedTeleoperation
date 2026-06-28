@@ -46,7 +46,8 @@ def handle_server_py(conn, addr):
                     turn = int(line[2:5])
                     speed = int(line[5:8])
                     
-                    servo = int(30 + (turn / 999.0) * 120)
+                    # Unity turn is 0-180. Map to 30-150 for servo.
+                    servo = int(30 + (turn / 180.0) * 120)
                     
                     # Convert Unity speed (0-512, neutral 256) to throttle magnitude
                     throttle = (speed - 256) * (200.0 / 256.0)
