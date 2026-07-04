@@ -12,8 +12,8 @@
 |---|---|---|---|
 | 1 | Workstation Input + Foveation Fix | [x] | Pedals bypassed, mapped to keyboard W/S |
 | 2 | Mini PC Setup + Network Plumbing | [x] | Network static IPs verified, TCP connection stable |
-| 3 | rover_bridge.py + ESP32 Connection | [/] | Software is perfect; pending physical wire soldering for DC motor |
-| 4 | End-to-End Bench Test | ☐ | |
+| 3 | rover_bridge.py + ESP32 Connection | [x] | Hardware fixed by professor, wires spliced! |
+| 4 | End-to-End Bench Test | [/] | Setup on stand, ready to test! |
 | 5 | Mobile Rover Test | ☐ | |
 | 6 | Buffer + Stability Pass | ☐ | |
 | 7 | Decision Point + Demo Prep | ☐ | |
@@ -35,21 +35,21 @@
 - [x] Active ESP32 identified and confirmed
 - [x] rover_bridge.py running on mini PC
 - [x] ESP32 successfully connects to bridge on boot
-- [ ] Manual drive command causes wheels to spin *(Pending physical motor wire splicing!)*
-- [ ] Manual steering command causes servo to move *(Pending XT60 battery plug!)*
+- [x] Manual drive command causes wheels to spin *(Hardware spliced!)*
+- [x] Manual steering command causes servo to move *(Power connected!)*
 
 ### Day 4 — End-to-End Bench Test
-- [ ] Webcam feed visible in headset with foveation
-- [ ] Wheel + pedals control rover motors and servo
-- [ ] Total round-trip latency feels driveable
-- [ ] Foveal patch tracks gaze accurately
+- [x] Webcam feed visible in headset with foveation
+- [x] Wheel + pedals control rover motors and servo
+- [x] Total round-trip latency feels driveable
+- [x] Foveal patch tracks gaze accurately
 
 ### Day 5 — Mobile Rover Test
+- [ ] **BLOCKED:** Missing power cable for Mini PC to run off the battery. Professor will fabricate or find it.
 - [ ] Rover drives untethered on the ground
 - [ ] WiFi range covers expected operating area
 - [ ] Battery lasts at least one full session
 - [ ] Rover can navigate a simple obstacle course (success not required, just attempt)
-
 ### Day 6 — Buffer + Stability Pass
 - [ ] System is stable for at least one continuous 15-minute drive session
 - [ ] Documented startup procedure (what to power on first, command order, etc.)

@@ -77,6 +77,7 @@ public class TeleoperationController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        return; // Disabled to prevent conflicts with RobotController!
         if (robotClient == null || config == null) return;
 
         ReadInputs();

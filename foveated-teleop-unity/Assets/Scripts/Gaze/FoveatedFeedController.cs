@@ -72,8 +72,8 @@ public class FoveatedFeedController : MonoBehaviour
         if (!foveationEnabled)
         {
             // When disabled, set fovea radius to a huge value so everything is "foveal"
+            // BUT we still need to update the shader properties so it clears the CropRect!
             feedMaterial.SetFloat(FoveaRadiusId, 10f);
-            return;
         }
 
         // Update gaze point

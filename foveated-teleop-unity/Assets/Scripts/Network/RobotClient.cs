@@ -1,14 +1,13 @@
 using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
 
 /// <summary>
-/// TCP client that sends drive commands to the Pioneer robot.
-/// Protocol: $CMD + turn(3 digits) + speed(3 digits) + \n
-/// CMD: "1" = forward, "2" = backward, "0" = stop
-/// Neutral turn = 090, neutral speed = 256.
+/// TCP Server that waits for the ESP32 to connect directly, then sends drive commands.
+/// Protocol: CMD[srv:3][mtr:3]\n
 /// </summary>
 public class RobotClient : MonoBehaviour
 {
@@ -16,168 +15,139 @@ public class RobotClient : MonoBehaviour
     [SerializeField] private NetworkConfig config;
 
     [Header("Status (Read-Only)")]
-    [SerializeField] private bool isConnected;
+    [SerializeField] private bool isConnected = false;
     [SerializeField] private string lastCommand = "";
 
-    private TcpClient tcpClient;
+    private TcpListener tcpListener;
+    private TcpClient connectedClient;
     private NetworkStream stream;
-    private Thread connectThread;
+    private Thread listenerThread;
     private CancellationTokenSource cts;
-
     private readonly object lockObj = new object();
     private string pendingCommand = null;
 
-    // ─── Public API ─────────────────────────────────────────────
-
-    /// <summary>Whether the client is currently connected to the robot.</summary>
     public bool IsConnected => isConnected;
 
-    /// <summary>
-    /// Queue a drive command to be sent on the next network tick.
-    /// </summary>
-    /// <param name="cmd">Command code: 0=stop, 1=forward, 2=backward</param>
-    /// <param name="turn">Turn value 0–180 (90 = straight)</param>
-    /// <param name="speed">Speed value 0–512 (256 = neutral/stopped)</param>
     public void SendDriveCommand(int cmd, int turn, int speed)
     {
-        // Enforce safety clamps
-        cmd = Mathf.Clamp(cmd, 0, 2);
-        turn = Mathf.Clamp(turn, 0, config != null ? config.maxTurn : 180);
-        speed = Mathf.Clamp(speed, 0, config != null ? config.maxSpeed : 512);
+        int servoAngle = Mathf.RoundToInt(30 + (turn / 180f) * 120);
+        servoAngle = Mathf.Clamp(servoAngle, 30, 150);
 
-        string formatted = $"${cmd}{turn:D3}{speed:D3}\n";
+        float throttle = (speed - 256) * (200f / 256f);
+        int motorSpeed = 255;
+        if (cmd == 1) motorSpeed = Mathf.RoundToInt(255 + throttle);
+        else if (cmd == 2) motorSpeed = Mathf.RoundToInt(255 - throttle);
+        
+        motorSpeed = Mathf.Clamp(motorSpeed, 55, 455);
+
+        string cmdString = $"CMD{servoAngle:D3}{motorSpeed:D3}\n";
+        
         lock (lockObj)
         {
-            pendingCommand = formatted;
+            if (isConnected) pendingCommand = cmdString;
         }
     }
 
-    /// <summary>
-    /// Send a raw command string (e.g. config message) directly over the control socket.
-    /// </summary>
     public void SendRawCommand(string command)
     {
         lock (lockObj)
         {
-            pendingCommand = command;
+            if (isConnected) pendingCommand = command;
         }
     }
-
-    // ─── Lifecycle ──────────────────────────────────────────────
 
     private void Start()
     {
-        if (config == null)
-        {
-            Debug.LogError("[RobotClient] NetworkConfig is not assigned!");
-            return;
-        }
-
+        if (config == null) return;
         cts = new CancellationTokenSource();
-        connectThread = new Thread(() => ConnectionLoop(cts.Token));
-        connectThread.IsBackground = true;
-        connectThread.Start();
+        listenerThread = new Thread(() => ListenForESP32(cts.Token));
+        listenerThread.IsBackground = true;
+        listenerThread.Start();
     }
+
+    private string lastSentCommand = "";
+    private float lastSendTime = 0f;
 
     private void Update()
     {
-        // Grab pending command and send it
         string cmd = null;
         lock (lockObj)
         {
             cmd = pendingCommand;
-            pendingCommand = null;
         }
 
         if (cmd != null && isConnected && stream != null)
         {
-            try
+            if (cmd != lastSentCommand)
             {
-                byte[] data = Encoding.ASCII.GetBytes(cmd);
-                stream.Write(data, 0, data.Length);
-                lastCommand = cmd.TrimEnd('\n');
-                // packed: cmd digit is [1], turn is [2..4], speed is [5..7]
-                MetricsLogger.Instance?.Log("cmd_sent", data.Length, 0f, lastCommand);
+                try
+                {
+                    byte[] data = Encoding.ASCII.GetBytes(cmd);
+                    stream.Write(data, 0, data.Length);
+                    lastCommand = cmd.TrimEnd('\n');
+                    lastSentCommand = cmd;
+                    MetricsLogger.Instance?.Log("cmd_sent", data.Length, 0f, lastCommand);
+                }
+                catch
+                {
+                    isConnected = false;
+                }
             }
-            catch (Exception ex)
+        }
+    }
+
+    private void ListenForESP32(CancellationToken token)
+    {
+        try
+        {
+            tcpListener = new TcpListener(IPAddress.Any, config.esp32Port);
+            tcpListener.Start();
+            Debug.Log($"[RobotClient] TCP Server listening on port {config.esp32Port} for ESP32...");
+            
+            while (!token.IsCancellationRequested)
             {
-                Debug.LogWarning($"[RobotClient] Send failed: {ex.Message}");
-                MarkDisconnected();
+                if (!tcpListener.Pending())
+                {
+                    Thread.Sleep(100);
+                    continue;
+                }
+
+                connectedClient = tcpListener.AcceptTcpClient();
+                connectedClient.NoDelay = true;
+                stream = connectedClient.GetStream();
+                isConnected = true;
+                Debug.Log($"[RobotClient] ESP32 CONNECTED from {((IPEndPoint)connectedClient.Client.RemoteEndPoint).Address}!");
+
+                while (isConnected && !token.IsCancellationRequested)
+                {
+                    if (connectedClient.Client.Poll(0, SelectMode.SelectRead) && connectedClient.Client.Available == 0)
+                    {
+                        isConnected = false;
+                        Debug.LogWarning("[RobotClient] ESP32 Disconnected.");
+                        break;
+                    }
+                    Thread.Sleep(50);
+                }
             }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("[RobotClient] Listener error: " + e.Message);
         }
     }
 
     private void OnDestroy()
     {
-        Disconnect();
+        cts?.Cancel();
+        isConnected = false;
+        stream?.Close();
+        connectedClient?.Close();
+        tcpListener?.Stop();
+        if (listenerThread != null) listenerThread.Join(1000);
     }
 
     private void OnApplicationQuit()
     {
-        Disconnect();
-    }
-
-    // ─── Connection Logic (Background Thread) ───────────────────
-
-    private void ConnectionLoop(CancellationToken token)
-    {
-        int attempt = 0;
-        while (!token.IsCancellationRequested)
-        {
-            if (!isConnected)
-            {
-                attempt++;
-                try
-                {
-                    Debug.Log($"[RobotClient] Connecting to {config.robotIP}:{config.controlPort} (attempt {attempt})...");
-                    tcpClient = new TcpClient();
-                    tcpClient.Connect(config.robotIP, config.controlPort);
-                    stream = tcpClient.GetStream();
-                    isConnected = true;
-                    attempt = 0;
-                    Debug.Log("[RobotClient] Connected successfully!");
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning($"[RobotClient] Connection failed (Is the python mock_pioneer server running?): {ex.Message}");
-                    isConnected = false;
-
-                    // Exponential back-off: 1s, 2s, 4s, 8s, max 16s
-                    int waitSec = Mathf.Min((int)Mathf.Pow(2, attempt - 1), 16);
-                    Thread.Sleep(waitSec * 1000);
-                }
-            }
-            else
-            {
-                // Poll connection health
-                Thread.Sleep(500);
-                try
-                {
-                    if (tcpClient != null && !tcpClient.Connected)
-                    {
-                        MarkDisconnected();
-                    }
-                }
-                catch
-                {
-                    MarkDisconnected();
-                }
-            }
-        }
-    }
-
-    private void MarkDisconnected()
-    {
-        isConnected = false;
-        Debug.LogWarning("[RobotClient] Disconnected from robot.");
-    }
-
-    private void Disconnect()
-    {
-        cts?.Cancel();
-        try { stream?.Close(); } catch { }
-        try { tcpClient?.Close(); } catch { }
-        isConnected = false;
-        connectThread?.Join(2000);
+        OnDestroy();
     }
 }

@@ -8,11 +8,18 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "NetworkConfig", menuName = "Teleoperation/Network Config")]
 public class NetworkConfig : ScriptableObject
 {
-    [Header("Robot Control Connection")]
-    [Tooltip("IP address of the Pioneer robot's control server")]
-    public string robotIP = "192.168.0.244";
+    [Header("Robot Control Connection (ESP32 UDP)")]
+    [Tooltip("IP address of the ESP32 (assigned by router)")]
+    public string esp32IP = "192.168.0.XXX";
 
-    [Tooltip("TCP port for sending drive commands")]
+    [Tooltip("UDP port for sending direct drive commands to ESP32")]
+    public int esp32Port = 1234;
+
+    [Header("Mini PC Video & Config Connection")]
+    [Tooltip("IP address of the Mini PC for video and gaze")]
+    public string robotIP = "192.168.0.208";
+
+    [Tooltip("TCP port on Mini PC for receiving configuration commands ($CFG)")]
     public int controlPort = 1234;
 
     [Header("Camera Feed Connection")]

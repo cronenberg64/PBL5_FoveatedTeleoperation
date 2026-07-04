@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee60d8e1241fb2a478daf25980a80ce6, type: 3}
   m_Name: NetworkConfig
   m_EditorClassIdentifier: Assembly-CSharp::NetworkConfig
+  esp32IP: 192.168.0.217
+  esp32Port: 1234
   robotIP: 192.168.0.208
   controlPort: 1239
   cameraPort: 1235

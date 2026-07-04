@@ -239,11 +239,13 @@ public class RobotController : MonoBehaviour
             int neutralTurn = 90;
             int neutralSpeed = 256;
 
-            int turn = Mathf.RoundToInt(neutralTurn + turnInput * neutralTurn);
+            // Invert the physical steering direction (subtracting turnInput instead of adding)
+            int turn = Mathf.RoundToInt(neutralTurn - turnInput * neutralTurn);
             turn = Mathf.Clamp(turn, 0, 180);
 
             int speed = Mathf.RoundToInt(neutralSpeed + Mathf.Abs(moveInput) * neutralSpeed);
-            speed = Mathf.Clamp(speed, 0, 512);
+            // Limit speed to 205-305 as requested by Professor Chandler to prevent the rover from driving too fast
+            speed = Mathf.Clamp(speed, 205, 305);
 
             int cmd = 0;
             if (Mathf.Approximately(moveInput, 0f) && Mathf.Approximately(turnInput, 0f))

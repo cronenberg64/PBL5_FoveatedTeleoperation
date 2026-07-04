@@ -122,7 +122,7 @@ public class ConditionController : MonoBehaviour
         }
     }
 
-    public void SetCondition(Condition c)
+    public void SetCondition(Condition c, bool updateShader = true)
     {
         activeCondition = c;
         string msg = "";
@@ -139,25 +139,19 @@ public class ConditionController : MonoBehaviour
                 break;
         }
 
-        RobotClient rc = FindAnyObjectByType<RobotClient>();
-        if (rc != null && rc.isActiveAndEnabled)
+        lock (lockObj)
         {
-            rc.SendRawCommand(msg);
-            Debug.Log($"[ConditionController] Routed condition message through RobotClient: {msg.TrimEnd('\n')}");
-        }
-        else
-        {
-            lock (lockObj)
-            {
-                pendingCommand = msg;
-            }
+            pendingCommand = msg;
         }
 
-        // Also update the local shader so the circle only appears in Foveated mode
-        FoveatedFeedController ffc = FindAnyObjectByType<FoveatedFeedController>();
-        if (ffc != null)
+        if (updateShader)
         {
-            ffc.SetFoveationEnabled(c == Condition.Foveated_15_85);
+            // Also update the local shader so the circle only appears in Foveated mode
+            FoveatedFeedController ffc = FindAnyObjectByType<FoveatedFeedController>();
+            if (ffc != null)
+            {
+                ffc.SetFoveationEnabled(c == Condition.Foveated_15_85);
+            }
         }
     }
 
@@ -166,20 +160,6 @@ public class ConditionController : MonoBehaviour
         int attempt = 0;
         while (!token.IsCancellationRequested)
         {
-            // If RobotClient is present in the scene, we don't need our own connection since we route through it.
-            // To be safe, we can just allow the connection loop to run. If RobotClient is not there, we connect.
-            // If RobotClient is there, we won't get any pending commands anyway because SetCondition routes it to rc.
-            // But wait, if we connect, we might steal the port 1234 from RobotClient!
-            // That is a critical point! If we connect, we steal port 1234 from RobotClient.
-            // So we MUST NOT connect if RobotClient is present!
-            // Let's declare a `private bool hasRobotClient = false;` updated on main thread in Start()/Update().
-            
-            if (hasRobotClient)
-            {
-                // We don't need our own connection; sleep and check again.
-                Thread.Sleep(1000);
-                continue;
-            }
 
             if (!isConnected)
             {
@@ -198,7 +178,7 @@ public class ConditionController : MonoBehaviour
                     Debug.Log("[ConditionController] Connected to control port successfully!");
 
                     // Re-send current condition on connection/reconnection
-                    SetCondition(activeCondition);
+                    SetCondition(activeCondition, false);
                 }
                 catch (Exception ex)
                 {
@@ -226,12 +206,9 @@ public class ConditionController : MonoBehaviour
         }
     }
 
-    private bool hasRobotClient = false;
-
     private void AwakeHelper()
     {
-        // Check if RobotClient exists
-        hasRobotClient = FindAnyObjectByType<RobotClient>() != null;
+        // No longer relying on RobotClient
     }
 
     private void MarkDisconnected()
