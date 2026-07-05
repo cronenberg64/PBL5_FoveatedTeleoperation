@@ -45,11 +45,10 @@
 - [x] Foveal patch tracks gaze accurately
 
 ### Day 5 — Mobile Rover Test
-- [ ] **BLOCKED:** Missing power cable for Mini PC to run off the battery. Professor will fabricate or find it.
-- [ ] Rover drives untethered on the ground
-- [ ] WiFi range covers expected operating area
-- [ ] Battery lasts at least one full session
-- [ ] Rover can navigate a simple obstacle course (success not required, just attempt)
+- [x] Rover drives untethered on the ground
+- [x] WiFi range covers expected operating area
+- [x] Battery lasts at least one full session
+- [x] Rover can navigate a simple obstacle course (success not required, just attempt)
 ### Day 6 — Buffer + Stability Pass
 - [ ] System is stable for at least one continuous 15-minute drive session
 - [ ] Documented startup procedure (what to power on first, command order, etc.)

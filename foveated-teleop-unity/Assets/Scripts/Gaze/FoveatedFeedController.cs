@@ -69,22 +69,39 @@ public class FoveatedFeedController : MonoBehaviour
     {
         if (feedMaterial == null) return;
 
-        if (!foveationEnabled)
-        {
-            // When disabled, set fovea radius to a huge value so everything is "foveal"
-            // BUT we still need to update the shader properties so it clears the CropRect!
-            feedMaterial.SetFloat(FoveaRadiusId, 10f);
-        }
-
         // Update gaze point
         Vector2 gaze = gazeProvider != null
             ? gazeProvider.GazeUV
             : new Vector2(0.5f, 0.5f);
 
         feedMaterial.SetVector(GazePointId, new Vector4(gaze.x, gaze.y, 0, 0));
-        feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
         feedMaterial.SetFloat(TransitionWidthId, transitionWidth);
-        feedMaterial.SetFloat(PeripheryPixelSizeId, peripheryPixelSize);
+
+        // Fetch active condition from ConditionController (fallback to Foveated if not found)
+        ConditionController.Condition activeCondition = ConditionController.Condition.Foveated_15_85;
+        if (ConditionController.Instance != null)
+        {
+            activeCondition = ConditionController.Instance.ActiveCondition;
+        }
+
+        if (activeCondition == ConditionController.Condition.UniformQ50)
+        {
+            // 1. Uniform Mode: Entire screen is sharp (foveal), and unpixelated
+            feedMaterial.SetFloat(FoveaRadiusId, 10f);
+            feedMaterial.SetFloat(PeripheryPixelSizeId, 1f); 
+        }
+        else if (activeCondition == ConditionController.Condition.PeripheralOnly_Q30)
+        {
+            // 3. Peripheral-Only Mode: Entire screen is blurry (pixelated), no sharp foveal circle
+            feedMaterial.SetFloat(FoveaRadiusId, 0f);
+            feedMaterial.SetFloat(PeripheryPixelSizeId, peripheryPixelSize);
+        }
+        else // ConditionController.Condition.Foveated_15_85
+        {
+            // 2. Foveated Mode: Foveal circle is sharp, everything outside is pixelated
+            feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
+            feedMaterial.SetFloat(PeripheryPixelSizeId, peripheryPixelSize);
+        }
 
         if (feedReceiver != null)
         {

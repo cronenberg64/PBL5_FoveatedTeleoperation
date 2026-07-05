@@ -235,11 +235,11 @@ public class CameraFeedReceiver : MonoBehaviour
             {
                 // Expose the crop rect for the shader to use
                 CropRect = new RectInt(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
-                
-                // We no longer blit the fovea onto the base texture here.
-                // The FoveatedFeed shader composite them smoothly instead.
-                // BlitFoveaOntoBase(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
             }
+        }
+        else
+        {
+            CropRect = new RectInt(0, 0, 0, 0);
         }
 
         feedDisplay.texture = _periphTex;
