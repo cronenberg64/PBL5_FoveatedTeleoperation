@@ -40,14 +40,14 @@ All ASCII. Total 18 bytes including newline.
 |---------|-------|---------|--------------------------------------|
 | `$CFG`  | 4     | literal | Config command prefix                |
 | mode    | 8     | string  | Mode name, left-aligned, space-padded: `"uniform "`, `"gaze    "`, `"periph  "` |
+| mode    | 8     | string  | Mode name, left-aligned, space-padded: `"uniform "`, `"gaze    "` |
 | pq      | 3     | 000–100 | Peripheral quality (zero-padded)     |
 | fq      | 3     | 000–100 | Fovea quality (zero-padded)          |
 | `\n`    | 1     | `0x0A`  | End-of-frame                         |
 
 Examples:
 - `$CFGuniform 050050\n` → switches to Uniform Q50 mode.
-- `$CFGgaze    015085\n` → switches to Gaze foveation mode (periph Q15, fovea Q85).
-- `$CFGperiph  030030\n` → switches to Peripheral-only Q30 mode.
+- `$CFGgaze    015085\n` → switches to Gaze-contingent dual payload (periph Q15, fovea Q85).
 
 Implemented in `ConditionController.SetCondition`.
 
@@ -128,15 +128,37 @@ Total header: **16 bytes**.
 
 ---
 
-### Peripheral-only mode payload
+## Encoding Conditions (Study Design v2)
 
-Activated via `$CFGperiph  [pq:3][fq:3]\n` or `--mode periph`. 
+| Condition | Mode | Periph Quality | Fovea Quality | Notes |
+|---|---|---|---|---|
+| Uniform | uniform | n/a | n/a | Q50, no gaze contingency |
+| Foveated | gaze | 15 | 85 | Conventional: sharp at gaze, degraded periphery |
+| InverseFoveated | gaze | [TBD from sweep] | [TBD from sweep] | Reversed: degraded at gaze, sharp periphery |
 
-The payload uses the exact same 16-byte dual-payload binary layout as gaze-contingent mode, but with the following parameters:
-- `len_fovea = 0` (the fovea_jpeg payload is omitted / 0 bytes)
-- `crop_x = 0`, `crop_y = 0`, `crop_w = 0`, `crop_h = 0`
+All three conditions are calibrated to match Uniform Q50's average 
+bandwidth (13,154 bytes/frame) within ±5%.
 
-Unity's `CameraFeedReceiver` detects `len_fovea = 0` and renders only the peripheral full-frame JPEG at the peripheral quality.
+**Design history note:** an earlier iteration used a single-layer 
+"PeripheralOnly" condition (no foveal patch at all). This was dropped 
+because a single-layer JPEG calibrated to match Uniform Q50's bandwidth 
+is mathematically identical to Uniform Q50 — the condition was 
+degenerate under the matched-bandwidth constraint. InverseFoveated 
+replaces it: it is genuinely gaze-contingent (the degraded region 
+tracks the eye), remains distinct from Uniform under bandwidth matching, 
+and directly tests the reversed-allocation hypothesis.
+
+---
+
+## Study Design v2
+
+Phase 4 moves from static bandwidth calibration to dynamic latency-aware evaluation.
+
+- **Objective:** Measure user task completion time as a function of end-to-end latency and visual fidelity degradation.
+- **Protocol:**
+  1. Unity introduces simulated network jitter via a delay buffer (0ms to 500ms).
+  2. Server adjusts foveation ROI radius based on the current detected round-trip-time (RTT).
+  3. Performance metrics (Success/Fail, time-to-target) are logged on the server.
 
 ---
 

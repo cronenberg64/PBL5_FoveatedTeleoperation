@@ -27,6 +27,7 @@ public class TrialMetricsLogger : MonoBehaviour
 
     private string csvFilePath;
     private string sessionTimestamp;
+    private GazeTelemetryLogger gazeTelemetry;
 
     // Public properties for external components and HUD
     public int TrialId => trialId;
@@ -71,6 +72,12 @@ public class TrialMetricsLogger : MonoBehaviour
         }
         csvFilePath = Path.Combine(logsDir, $"trial_metrics_{sessionTimestamp}.csv");
 
+        gazeTelemetry = GetComponent<GazeTelemetryLogger>();
+        if (gazeTelemetry == null)
+        {
+            gazeTelemetry = gameObject.AddComponent<GazeTelemetryLogger>();
+        }
+
         WriteCsvHeader();
     }
 
@@ -83,8 +90,11 @@ public class TrialMetricsLogger : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard != null)
         {
-            if (keyboard.f5Key.wasPressedThisFrame) startPressed = true;
-            if (keyboard.f6Key.wasPressedThisFrame) successPressed = true;
+            if (keyboard.spaceKey.wasPressedThisFrame) 
+            {
+                if (isTrialActive) successPressed = true;
+                else startPressed = true;
+            }
             if (keyboard.f7Key.wasPressedThisFrame) failPressed = true;
             if (keyboard.f8Key.wasPressedThisFrame) RegisterCollision();
         }
@@ -148,11 +158,19 @@ public class TrialMetricsLogger : MonoBehaviour
         isTrialActive = true;
         activeScenario = scenario;
         activeCondition = condition;
+        trialStartTimeStr = System.DateTime.Now.ToString("HH:mm:ss.fff");
         trialStartTime = Time.time;
-        trialStartTimeStr = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
         collisionCount = 0;
+        lastCompletionTime = 0f;
 
-        Debug.Log($"[TrialMetricsLogger] Start Trial {trialId} | Scenario: {scenario} | Condition: {condition}");
+        if (gazeTelemetry != null)
+        {
+            string logsDir = Path.Combine(Application.dataPath, "../logs");
+            string telemetryPath = Path.Combine(logsDir, $"gaze_telemetry_SubjX_Trial{trialId}_{sessionTimestamp}.csv");
+            gazeTelemetry.StartLogging(telemetryPath);
+        }
+
+        Debug.Log($"[TrialMetricsLogger] Trial {trialId} STARTED: {scenario} ({condition})");
     }
 
     public void EndTrial(bool success)
@@ -163,15 +181,19 @@ public class TrialMetricsLogger : MonoBehaviour
             return;
         }
 
-        float endTime = Time.time;
-        trialEndTimeStr = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-        lastCompletionTime = endTime - trialStartTime;
         isTrialActive = false;
+        trialEndTimeStr = System.DateTime.Now.ToString("HH:mm:ss.fff");
+        lastCompletionTime = Time.time - trialStartTime;
 
-        AppendTrialToCsv(success);
+        float blinkRate = 0f;
+        if (gazeTelemetry != null)
+        {
+            gazeTelemetry.StopLogging(out blinkRate);
+        }
 
-        Debug.Log($"[TrialMetricsLogger] End Trial {trialId} | Success: {success} | Time: {lastCompletionTime:F2}s | Collisions: {collisionCount}");
+        WriteCsvRow(success, blinkRate);
 
+        Debug.Log($"[TrialMetricsLogger] Trial {trialId} ENDED. Success: {success}, Time: {lastCompletionTime:F2}s, Collisions: {collisionCount}, BlinkRate: {blinkRate:F2}");
         trialId++;
 
         // Reset the robot on trial end
@@ -197,8 +219,7 @@ public class TrialMetricsLogger : MonoBehaviour
         {
             if (!File.Exists(csvFilePath))
             {
-                string header = "trial_id,scenario,condition,trial_start_time,trial_end_time,completion_time_seconds,collision_count,success\n";
-                File.WriteAllText(csvFilePath, header, Encoding.UTF8);
+                File.WriteAllText(csvFilePath, "TrialID,Scenario,Condition,StartTime,EndTime,DurationSeconds,Success,Collisions,BlinkRatePerMin\n", Encoding.UTF8);
                 Debug.Log($"[TrialMetricsLogger] Initialized CSV log file at {csvFilePath}");
             }
         }
@@ -208,11 +229,11 @@ public class TrialMetricsLogger : MonoBehaviour
         }
     }
 
-    private void AppendTrialToCsv(bool success)
+    private void WriteCsvRow(bool success, float blinkRate)
     {
         try
         {
-            string row = $"{trialId},{activeScenario},{activeCondition},{trialStartTimeStr},{trialEndTimeStr},{lastCompletionTime:F3},{collisionCount},{success}\n";
+            string row = $"{trialId},{activeScenario},{activeCondition},{trialStartTimeStr},{trialEndTimeStr},{lastCompletionTime:F2},{(success ? 1 : 0)},{collisionCount},{blinkRate:F2}\n";
             File.AppendAllText(csvFilePath, row, Encoding.UTF8);
             Debug.Log($"[TrialMetricsLogger] Wrote metrics row to CSV for trial {trialId}");
         }

@@ -1,4 +1,4 @@
-# PBL5 Foveated Teleoperation for Meta Quest Pro
+# PBL5 Foveated Teleoperation for VIVE Focus Vision
 
 A modern Unity-based teleoperation system for Pioneer robots, featuring **Gaze-Contingent Foveated Streaming** to optimize perceptual quality and bandwidth.
 
@@ -13,48 +13,50 @@ A modern Unity-based teleoperation system for Pioneer robots, featuring **Gaze-C
   - **Steer**: Right Thumbstick X
 - **TCP Protocol Baseline**: Reconstructed `$CMD + turn(3) + speed(3) + \n` protocol for communication with the physical Pioneer robot.
 
-## Project Structure
+## Hardware Architecture
 
-The Unity project is located in the `foveated-teleop-unity/` subfolder.
+The system is designed to operate on a physical Pioneer-style rover using a decentralized networking architecture to minimize latency:
 
-- `Assets/Scripts/Network/`: TCP logic for drive commands and JPEG camera feed reception.
-- `Assets/Scripts/Control/`: Modernized input handling and gear-shift logic.
-- `Assets/Scripts/Gaze/`: Gaze coordinate providers and foveated shader controllers.
-- `Assets/Shaders/`: HLSL foveated rendering shader.
-- `Assets/InputActions/`: Unity Input System action asset.
+1. **Workstation (Unity Client)**: Runs the VR interface and eye-tracking. It acts as a **TCP Server** to receive direct connections from the ESP32 for zero-latency motor control.
+2. **Mini PC (On Rover)**: Runs `server.py` over WiFi. It handles camera capture, applies the OpenCV foveation encoding based on gaze coordinates, and streams the dual-payload video feed back to Unity.
+3. **ESP32 (On Rover)**: Handles physical wheel/servo control. It connects directly to the Workstation's IP over WiFi to receive drive commands, completely bypassing the Mini PC.
 
 ## Setup & Testing Instructions
 
 1. **Unity Version**: Use Unity 6 (`6000.4.3f1`) or newer.
 2. **Dependencies**: Ensure the **Input System** and **XR Interaction Toolkit** packages are installed.
+3. **Network Configuration**: Create or edit `NetworkConfig` (Assets → Create → Teleoperation → Network Config). Set the `robotIP` to your Mini PC's IP address. 
 
 ---
 
-### Option A: Virtual Simulated Driving (Track Loopback)
-In this mode, Unity captures the virtual 3D corridor, sends it to Python over TCP, Python applies foveation processing, and streams it back to display on the viewport.
+### Option A: Physical Rover Teleoperation (Live)
+In this mode, the Workstation receives live video from the Mini PC and sends physical drive commands directly to the ESP32.
 
-1. **Start the Python Server in Unity mode**:
+1. **Power up the Rover**:
+   * Hook up the main battery to power the Mini PC.
+   * Power on the ESP32 and ensure it connects to the lab WiFi.
+2. **Start the Python Camera Server** (on the Mini PC):
+   ```bash
+   cd mock_pioneer
+   python server.py
+   ```
+3. **Open the Scene in Unity**:
+   * Open `Assets/Scenes/DesktopFoveated.unity`.
+4. **Press Play** in Unity to begin. The ESP32 should automatically connect to your Workstation, and the video feed will start streaming.
+
+---
+
+### Option B: Virtual Simulated Driving (Loopback)
+In this mode, Unity captures the virtual 3D corridor, sends it to Python over TCP, Python applies foveation processing, and streams it back to display on the viewport. Useful for testing without hardware.
+
+1. **Start the Python Server in Unity mode** (on your Workstation):
    ```powershell
    cd mock_pioneer
    python server.py --camera-source unity
    ```
 2. **Open the Scene in Unity**:
-   * Click **PBL5** > **Open Simulated Driving** (or open `Assets/Scenes/SimulatedDriving.unity`).
+   * Open `Assets/Scenes/SimulatedDriving.unity`.
    * *If the scene is empty*, click **PBL5** > **Build Simulated Driving Scene** to generate the track.
-3. **Press Play** in Unity to begin.
-
----
-
-### Option B: Live Camera Teleoperation (Webcam Mode)
-In this mode, the Python server streams your local webcam feed (simulating a physical robot camera) to the Unity screen.
-
-1. **Start the Python Server in Webcam mode**:
-   ```powershell
-   cd mock_pioneer
-   python server.py
-   ```
-2. **Open the Scene in Unity**:
-   * Click **PBL5** > **Open Desktop Scene** (or open `Assets/Scenes/DesktopFoveated.unity`).
 3. **Press Play** in Unity to begin.
 
 ---
@@ -64,6 +66,6 @@ While the Unity scene is running, you can dynamically switch between rendering m
 
 *   **Press 1**: **Uniform Mode** (`UniformQ50`) — Uniform quality across the entire screen (no foveation).
 *   **Press 2**: **Foveated Mode** (`Foveated_15_85`) — Gaze-contingent foveation enabled! Periphery is rendered at Quality 15, while a high-resolution circle follows your cursor at Quality 85.
-*   **Press 3**: **Peripheral Only** (`PeripheralOnly_Q30`) — Peripheral rendering at Quality 30.
+*   **Press 3**: **Inverse-Foveated** (`InverseFoveated_TBD`) — Reversed gaze-contingency! Periphery is sharp while the gaze focal point is pixelated and degraded.
 
-**Driving Controls**: Press **W/A/S/D** to steer/drive, and **Space** to apply brakes.
+**Driving Controls**: Press **W/A/S/D** to steer/drive, and **Space** to apply brakes. Gear shifting is mapped to the **A Button** on VR controllers.

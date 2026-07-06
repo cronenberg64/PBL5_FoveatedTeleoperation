@@ -33,7 +33,7 @@ os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
 import cv2
 import numpy as np
 
-from foveation import encode_uniform, encode_dual_payload, encode_peripheral_only
+from foveation import encode_uniform, encode_dual_payload
 from metrics_server import MetricsServer
 
 # ── Shared state ─────────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ def _handle_cfg(line: str) -> None:
     except ValueError:
         raise ValueError(f"Non-integer quality in CFG: {line!r}")
         
-    if mode_str not in ("uniform", "gaze", "periph"):
+    if mode_str not in ("uniform", "gaze"):
         raise ValueError(f"Unknown mode in CFG: {mode_str!r}")
         
     global _current_mode, _current_quality, _current_periph_quality, _current_fovea_quality
@@ -486,12 +486,12 @@ def camera_thread(
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             source_name = "Rover camera" if camera_source == "rover" else "Webcam"
-            print(f"[Camera] {source_name} opened — index={idx}, mode={mode}"
+            print(f"[Camera] {source_name} opened - index={idx}, mode={mode}"
                   + (f", quality={quality}" if mode == "uniform"
                      else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
                           f", fovea_size={fovea_size}"))
     else:
-        print(f"[Camera] Unity frame source active (listening on port 1237) — mode={mode}"
+        print(f"[Camera] Unity frame source active (listening on port 1237) - mode={mode}"
               + (f", quality={quality}" if mode == "uniform"
                  else f", periph_quality={periph_quality}, fovea_quality={fovea_quality}"
                       f", fovea_size={fovea_size}"))
@@ -580,12 +580,21 @@ def camera_thread(
                             cv2.rectangle(preview, (x, y), (x + w, y + h), (0, 0, 255), 2)
                             cv2.putText(preview, f"FOVEA {w}x{h} @ {x},{y}", (10, 30),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
                             try:
                                 _preview_queue.put_nowait(("Gaze Mode", preview))
                             except queue.Full:
                                 pass
                         
                         if _metrics:
+                            # Compute condition_label
+                            if curr_fq > curr_pq:
+                                cond_lbl = "Foveated"
+                            elif curr_pq > curr_fq:
+                                cond_lbl = "InverseFoveated"
+                            else:
+                                cond_lbl = "Foveated" # fallback
+
                             delta_ms = (t0 - gaze_ts) * 1000 if gaze_ts > 0 else 0.0
                             _metrics.log(
                                 "frame_sent",
@@ -594,33 +603,12 @@ def camera_thread(
                                 bytes_fovea=stats["fovea_bytes"],
                                 gaze_uv=f"{gaze_u:.3f},{gaze_v:.3f}",
                                 quality_mode=curr_mode,
+                                condition_label=cond_lbl,
                                 crop_x=str(stats["crop_x"]),
                                 crop_y=str(stats["crop_y"]),
                                 crop_w=str(stats["crop_w"]),
                                 crop_h=str(stats["crop_h"]),
                                 delta_ms=f"{delta_ms:.1f}",
-                            )
-                    elif curr_mode == "periph":
-                        payload = encode_peripheral_only(frame, curr_pq)
-                        if show:
-                            try:
-                                _preview_queue.put_nowait(("Periph-Only Mode", frame))
-                            except queue.Full:
-                                pass
-                        
-                        if _metrics:
-                            _metrics.log(
-                                "frame_sent",
-                                bytes_total=len(payload),
-                                bytes_periph=len(payload) - 16,
-                                bytes_fovea=0,
-                                gaze_uv=f"{gaze_u:.3f},{gaze_v:.3f}",
-                                quality_mode=curr_mode,
-                                crop_x="0",
-                                crop_y="0",
-                                crop_w="0",
-                                crop_h="0",
-                                delta_ms="0.0",
                             )
                     else:
                         payload = encode_uniform(frame, curr_quality)
@@ -676,9 +664,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["uniform", "gaze", "periph"],
+        choices=["uniform", "gaze"],
         default="uniform",
-        help="Camera encoding mode. 'uniform' = single JPEG. 'gaze' = dual-payload ROI. 'periph' = peripheral-only (default: uniform).",
+        help="Camera encoding mode. 'uniform' = single JPEG. 'gaze' = dual-payload ROI. (default: uniform).",
     )
     parser.add_argument(
         "--quality",
@@ -784,9 +772,7 @@ def main() -> None:
     mode_label = (
         f"uniform-{args.quality}"
         if args.mode == "uniform"
-        else (f"gaze-p{args.periph_quality}-f{args.fovea_quality}"
-              if args.mode == "gaze"
-              else f"periph-p{args.periph_quality}")
+        else f"gaze-p{args.periph_quality}-f{args.fovea_quality}"
     )
     if args.loss > 0:
         mode_label += f"-loss{args.loss}%"
@@ -833,7 +819,7 @@ def main() -> None:
     for t in threads:
         t.start()
 
-    print(f"\n[Server] Running — mode={args.mode}"
+    print(f"\n[Server] Running - mode={args.mode}"
           + (f", quality={args.quality}" if args.mode == "uniform"
              else f", periph_quality={args.periph_quality}"
                   f", fovea_quality={args.fovea_quality}"

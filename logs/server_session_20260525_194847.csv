@@ -1,2 +1,0 @@
-t,event,bytes_total,bytes_periph,bytes_fovea,cmd_received,gaze_uv,quality_mode,crop_x,crop_y,crop_w,crop_h,delta_ms
-1779706127.8382,server_start,0,0,0,,,gaze-p15-f85-unity,,,,,

@@ -90,10 +90,10 @@ public class FoveatedFeedController : MonoBehaviour
             feedMaterial.SetFloat(FoveaRadiusId, 10f);
             feedMaterial.SetFloat(PeripheryPixelSizeId, 1f); 
         }
-        else if (activeCondition == ConditionController.Condition.PeripheralOnly_Q30)
+        else if (activeCondition == ConditionController.Condition.InverseFoveated_TBD)
         {
-            // 3. Peripheral-Only Mode: Entire screen is blurry (pixelated), no sharp foveal circle
-            feedMaterial.SetFloat(FoveaRadiusId, 0f);
+            // 3. Inverse-Foveated Mode: The server provides inverted qualities, but we still apply the foveal patch
+            feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
             feedMaterial.SetFloat(PeripheryPixelSizeId, peripheryPixelSize);
         }
         else // ConditionController.Condition.Foveated_15_85

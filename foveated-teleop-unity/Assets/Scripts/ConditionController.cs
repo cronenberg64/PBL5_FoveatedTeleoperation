@@ -13,7 +13,7 @@ public class ConditionController : MonoBehaviour
     {
         UniformQ50,
         Foveated_15_85,
-        PeripheralOnly_Q30
+        InverseFoveated_TBD
     }
 
     [Header("Configuration")]
@@ -93,7 +93,7 @@ public class ConditionController : MonoBehaviour
                 }
                 else if (keyboard.digit3Key.wasPressedThisFrame || keyboard.numpad3Key.wasPressedThisFrame)
                 {
-                    SetCondition(Condition.PeripheralOnly_Q30);
+                    SetCondition(Condition.InverseFoveated_TBD);
                 }
             }
         }
@@ -134,8 +134,9 @@ public class ConditionController : MonoBehaviour
             case Condition.Foveated_15_85:
                 msg = "$CFGgaze    015085\n";
                 break;
-            case Condition.PeripheralOnly_Q30:
-                msg = "$CFGperiph  030030\n";
+            case Condition.InverseFoveated_TBD:
+                // TODO: update to calibrated matched-bandwidth pair once bench sweep completes — see docs/PROTOCOL.md
+                msg = "$CFGgaze    050010\n";
                 break;
         }
 
