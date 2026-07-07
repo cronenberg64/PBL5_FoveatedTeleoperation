@@ -31,7 +31,7 @@ public class FoveatedFeedController : MonoBehaviour
     [SerializeField] private float peripheryPixelSize = 15f;
 
     [Header("Toggle")]
-    [SerializeField] private bool foveationEnabled = true;
+    // State removed to prevent desync bugs
 
     private Material feedMaterial;
     private RawImage rawImage;
@@ -77,6 +77,13 @@ public class FoveatedFeedController : MonoBehaviour
         feedMaterial.SetVector(GazePointId, new Vector4(gaze.x, gaze.y, 0, 0));
         feedMaterial.SetFloat(TransitionWidthId, transitionWidth);
 
+        // Force feed the correct gaze to the uploader to bypass broken Inspector references
+        GazeUploader uploader = FindAnyObjectByType<GazeUploader>();
+        if (uploader != null)
+        {
+            uploader.ForceGaze(gaze.x, gaze.y);
+        }
+
         // Fetch active condition from ConditionController (fallback to Foveated if not found)
         ConditionController.Condition activeCondition = ConditionController.Condition.Foveated_15_85;
         if (ConditionController.Instance != null)
@@ -86,19 +93,21 @@ public class FoveatedFeedController : MonoBehaviour
 
         if (activeCondition == ConditionController.Condition.UniformQ50)
         {
-            // 1. Uniform Mode: Entire screen is sharp (foveal), and unpixelated
+            // 1. Uniform Mode: Entire screen is sharp (fovea radius massive to override)
             feedMaterial.SetFloat(FoveaRadiusId, 10f);
             feedMaterial.SetFloat(PeripheryPixelSizeId, 1f); 
+            // We can optionally return here if we don't want to draw fovea tex at all
+            // But updating CropRect is harmless and ensures it never gets stuck
         }
         else if (activeCondition == ConditionController.Condition.InverseFoveated_TBD)
         {
-            // 3. Inverse-Foveated Mode: The server provides inverted qualities, but we still apply the foveal patch
+            // 3. Inverse-Foveated Mode: Periphery is sharp (1f), Fovea is low quality patch from server
             feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
-            feedMaterial.SetFloat(PeripheryPixelSizeId, peripheryPixelSize);
+            feedMaterial.SetFloat(PeripheryPixelSizeId, 1f);
         }
         else // ConditionController.Condition.Foveated_15_85
         {
-            // 2. Foveated Mode: Foveal circle is sharp, everything outside is pixelated
+            // 2. Foveated Mode: Foveal circle is sharp, periphery is blurred
             feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
             feedMaterial.SetFloat(PeripheryPixelSizeId, peripheryPixelSize);
         }
@@ -111,6 +120,17 @@ public class FoveatedFeedController : MonoBehaviour
             }
             RectInt rect = feedReceiver.CropRect;
             feedMaterial.SetVector(CropRectId, new Vector4(rect.x, rect.y, rect.width, rect.height));
+
+            // Failsafe: Force pass the texel size. CanvasRenderer often fails to populate _MainTex_TexelSize automatically for RawImage.
+            if (feedReceiver.FrameWidth > 0 && feedReceiver.FrameHeight > 0)
+            {
+                feedMaterial.SetVector("_MainTex_TexelSize", new Vector4(
+                    1f / feedReceiver.FrameWidth, 
+                    1f / feedReceiver.FrameHeight, 
+                    feedReceiver.FrameWidth, 
+                    feedReceiver.FrameHeight
+                ));
+            }
         }
     }
 
@@ -124,10 +144,10 @@ public class FoveatedFeedController : MonoBehaviour
 
     // ─── Public API ─────────────────────────────────────────────
 
-    /// <summary>Enable or disable the foveation effect at runtime.</summary>
+    /// <summary>Deprecated, no-op.</summary>
     public void SetFoveationEnabled(bool enabled)
     {
-        foveationEnabled = enabled;
+        // Replaced by dynamic Condition check in Update
     }
 
     /// <summary>Adjust the fovea radius at runtime.</summary>

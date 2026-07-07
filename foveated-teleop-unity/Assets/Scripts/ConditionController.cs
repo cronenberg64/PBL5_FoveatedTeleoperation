@@ -151,7 +151,7 @@ public class ConditionController : MonoBehaviour
             FoveatedFeedController ffc = FindAnyObjectByType<FoveatedFeedController>();
             if (ffc != null)
             {
-                ffc.SetFoveationEnabled(c == Condition.Foveated_15_85);
+                ffc.SetFoveationEnabled(c == Condition.Foveated_15_85 || c == Condition.InverseFoveated_TBD);
             }
         }
     }

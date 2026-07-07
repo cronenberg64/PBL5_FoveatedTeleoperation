@@ -36,6 +36,10 @@ public class GazeProvider : MonoBehaviour
     // Metrics: count updates per second
     private int _updateCount;
     private float _metricsWindowStart;
+    private float _lastLogTime;
+
+    [Tooltip("Is the gaze currently tracking a valid hit?")]
+    public bool GazeValid { get; private set; }
 
     [Header("Configuration")]
     [Tooltip("The camera feed plane(s) to raycast against for UV coordinates")]
@@ -97,6 +101,15 @@ public class GazeProvider : MonoBehaviour
         if (vrCamera == null)
         {
             vrCamera = Camera.main;
+            if (vrCamera == null)
+            {
+                Debug.LogError("[GazeProvider] ERROR: vrCamera is null! Cannot compute raycast.");
+            }
+        }
+
+        if (feedPlanes == null || feedPlanes.Length == 0 || feedPlanes[0] == null)
+        {
+            Debug.LogError("[GazeProvider] ERROR: feedPlanes is null or empty! Cannot raycast.");
         }
 
         CheckEyeTrackingAvailability();
@@ -381,13 +394,17 @@ public class GazeProvider : MonoBehaviour
 
     private void UpdateGazeUV(Ray gazeRay)
     {
-        if (feedPlanes == null || feedPlanes.Length == 0 || vrCamera == null)
+        bool shouldLog = (Time.time - _lastLogTime) > 1.0f;
+        if (shouldLog) _lastLogTime = Time.time;
+
+        if (feedPlanes == null || feedPlanes.Length == 0 || feedPlanes[0] == null || vrCamera == null)
         {
+            if (shouldLog) Debug.LogWarning("[GazeProvider] Raycast MISS: Missing feedPlanes or vrCamera!");
             gazeUV = new Vector2(0.5f, 0.5f);
+            GazeValid = false;
             return;
         }
 
-        // Raycast against each feed plane and use the closest hit
         float closestDist = float.MaxValue;
         Vector2 bestUV = new Vector2(0.5f, 0.5f);
         bool hitAny = false;
@@ -396,42 +413,71 @@ public class GazeProvider : MonoBehaviour
         {
             if (plane == null) continue;
 
-            // Create a virtual plane from the RectTransform
             Vector3 planeNormal = plane.forward;
             Vector3 planePoint = plane.position;
             Plane p = new Plane(planeNormal, planePoint);
 
             float enter;
-            if (p.Raycast(gazeRay, out enter) && enter < maxRayDistance && enter < closestDist)
+            bool raycastHit = p.Raycast(gazeRay, out enter);
+
+            if (shouldLog)
             {
-                Vector3 hitWorld = gazeRay.GetPoint(enter);
+                Debug.Log($"[GazeProvider] Ray: Origin={gazeRay.origin}, Dir={gazeRay.direction}. " +
+                          $"Plane: Pos={planePoint}, Fwd={planeNormal}. " +
+                          $"Raycast={raycastHit}, enter={enter}.");
+            }
 
-                // Convert world hit to local space of the RectTransform
-                Vector3 localHit = plane.InverseTransformPoint(hitWorld);
-                Rect rect = plane.rect;
-
-                // Normalize to 0–1 UV
-                float u = (localHit.x - rect.x) / rect.width;
-                float v = (localHit.y - rect.y) / rect.height;
-
-                // Only accept if within bounds
-                if (u >= 0f && u <= 1f && v >= 0f && v <= 1f)
+            if (raycastHit)
+            {
+                if (enter >= maxRayDistance)
                 {
-                    bestUV = new Vector2(u, v);
-                    closestDist = enter;
-                    hitAny = true;
+                    if (shouldLog) Debug.Log($"[GazeProvider] Raycast MISS: enter ({enter}) >= maxRayDistance ({maxRayDistance})");
                 }
+                else if (enter < 0)
+                {
+                    if (shouldLog) Debug.Log($"[GazeProvider] Raycast MISS: negative enter distance ({enter}) - plane is behind origin!");
+                }
+                else if (enter < closestDist)
+                {
+                    Vector3 hitWorld = gazeRay.GetPoint(enter);
+                    Vector3 localHit = plane.InverseTransformPoint(hitWorld);
+                    Rect rect = plane.rect;
+
+                    float u = (localHit.x - rect.x) / rect.width;
+                    float v = (localHit.y - rect.y) / rect.height;
+
+                    if (shouldLog)
+                    {
+                        Debug.Log($"[GazeProvider] HIT Computed: localHit={localHit}, rect={rect}, u={u}, v={v}");
+                    }
+
+                    if (u >= 0f && u <= 1f && v >= 0f && v <= 1f)
+                    {
+                        bestUV = new Vector2(u, v);
+                        closestDist = enter;
+                        hitAny = true;
+                    }
+                    else
+                    {
+                        if (shouldLog) Debug.Log($"[GazeProvider] Raycast REJECTED: u/v ({u}, {v}) outside [0, 1] bounds!");
+                    }
+                }
+            }
+            else
+            {
+                if (shouldLog) Debug.Log("[GazeProvider] Raycast MISS: Plane.Raycast returned false (ray is parallel or pointing away).");
             }
         }
 
         if (hitAny)
         {
             gazeUV = bestUV;
+            GazeValid = true;
         }
         else
         {
-            // Default to center when not looking at any feed plane
             gazeUV = new Vector2(0.5f, 0.5f);
+            GazeValid = false;
         }
     }
 

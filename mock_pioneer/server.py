@@ -78,9 +78,18 @@ _preview_queue = queue.Queue(maxsize=1)
 
 def _get_gaze() -> tuple[float, float, float]:
     """Return the latest non-stale gaze UV and its timestamp, or (0.5, 0.5, 0.0) if stale / never set."""
+    global _last_stale_log
     with _gaze_lock:
         age = time.time() - _gaze_timestamp
         if _gaze_timestamp == 0.0 or age > _GAZE_STALE_TIMEOUT_S:
+            now = time.time()
+            try:
+                if now - _last_stale_log > 5.0:
+                    print(f"[Gaze] STALE — using center fallback (age: {age:.2f}s)")
+                    _last_stale_log = now
+            except NameError:
+                _last_stale_log = now
+                print(f"[Gaze] STALE — using center fallback (age: {age:.2f}s)")
             return (0.5, 0.5, 0.0)
         return (_latest_gaze[0], _latest_gaze[1], _gaze_timestamp)
 

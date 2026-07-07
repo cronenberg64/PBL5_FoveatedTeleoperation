@@ -66,6 +66,9 @@ public class CameraFeedReceiver : MonoBehaviour
 
     public Texture2D FoveaTex => _foveaTex;
     public RectInt CropRect { get; private set; }
+    
+    public int FrameWidth => _periphTex != null ? _periphTex.width : 0;
+    public int FrameHeight => _periphTex != null ? _periphTex.height : 0;
 
     private TcpClient tcpClient;
     private Thread receiveThread;
@@ -235,6 +238,11 @@ public class CameraFeedReceiver : MonoBehaviour
             {
                 // Expose the crop rect for the shader to use
                 CropRect = new RectInt(latest.CropX, latest.CropY, latest.CropW, latest.CropH);
+            }
+            else
+            {
+                Debug.LogWarning("[CameraFeed] Fovea image decoding failed! Retaining periphery but clearing CropRect.");
+                CropRect = new RectInt(0, 0, 0, 0);
             }
         }
         else

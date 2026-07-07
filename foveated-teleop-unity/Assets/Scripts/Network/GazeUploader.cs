@@ -39,13 +39,28 @@ public class GazeUploader : MonoBehaviour
     {
         if (config == null)
         {
-            UnityEngine.Debug.LogError("[GazeUploader] NetworkConfig is not assigned!");
-            return;
+            var rc = FindAnyObjectByType<RobotClient>();
+            if (rc != null)
+            {
+                var field = rc.GetType().GetField("config", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                if (field != null)
+                {
+                    config = (NetworkConfig)field.GetValue(rc);
+                }
+            }
+            if (config == null)
+            {
+                UnityEngine.Debug.LogError("[GazeUploader] NetworkConfig is not assigned!");
+                return;
+            }
         }
         if (gazeProvider == null)
         {
-            UnityEngine.Debug.LogError("[GazeUploader] GazeProvider is not assigned!");
-            return;
+            gazeProvider = FindAnyObjectByType<GazeProvider>();
+            if (gazeProvider == null)
+            {
+                UnityEngine.Debug.LogWarning("[GazeUploader] GazeProvider is not assigned. Will try to find one in Update.");
+            }
         }
 
         cts = new CancellationTokenSource();
@@ -56,13 +71,14 @@ public class GazeUploader : MonoBehaviour
 
     private void Update()
     {
-        // Snapshot gaze on the main thread (safe to access gazeProvider here)
-        if (gazeProvider != null)
-        {
-            Vector2 uv = gazeProvider.GazeUV;
-            _gazeU = uv.x;
-            _gazeV = uv.y;
-        }
+        // Gaze is now pushed externally by FoveatedFeedController.
+        // We only maintain the loop here.
+    }
+
+    public void ForceGaze(float u, float v)
+    {
+        _gazeU = u;
+        _gazeV = v;
     }
 
     private void OnDestroy()

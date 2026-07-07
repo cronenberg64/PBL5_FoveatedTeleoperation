@@ -74,6 +74,14 @@ Shader "Teleoperation/FoveatedFeed"
                 float2 uv = i.uv;
                 float2 gazeUV = _GazePoint.xy;
 
+                // Sync the mask with the actual received network payload, not instantaneous gaze
+                float cropYFromBottom = _MainTex_TexelSize.w - _CropRect.y - _CropRect.w;
+                if (_CropRect.z > 0.5) 
+                {
+                    gazeUV.x = (_CropRect.x + _CropRect.z * 0.5) / _MainTex_TexelSize.z;
+                    gazeUV.y = (cropYFromBottom + _CropRect.w * 0.5) / _MainTex_TexelSize.w;
+                }
+
                 // ── Distance from gaze point ────────────────────
                 // Correct for aspect ratio so the fovea is circular, not elliptical
                 float aspect = _MainTex_TexelSize.z / max(_MainTex_TexelSize.w, 1.0);
@@ -96,7 +104,6 @@ Shader "Teleoperation/FoveatedFeed"
                     // Map uv to FoveaTex coordinates
                     // OpenCV crop_y is from the TOP. Unity uv.y is from the BOTTOM.
                     // So cropY from bottom = ImageHeight - crop_y(top) - crop_h
-                    float cropYFromBottom = _MainTex_TexelSize.w - _CropRect.y - _CropRect.w;
 
                     float cropU = (uv.x * _MainTex_TexelSize.z - _CropRect.x) / _CropRect.z;
                     float cropV = (uv.y * _MainTex_TexelSize.w - cropYFromBottom) / _CropRect.w;
