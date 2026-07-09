@@ -270,11 +270,11 @@ def _connect_rover_out():
         except Exception:
             time.sleep(2)
 
-def control_thread(stop_event: threading.Event, use_rover_out: bool) -> None:
+def control_thread(stop_event: threading.Event, use_rover_out: bool, port: int) -> None:
     if use_rover_out:
         threading.Thread(target=_connect_rover_out, daemon=True).start()
 
-    server_sock = _make_server_socket(1234)
+    server_sock = _make_server_socket(port)
     server_sock.settimeout(1.0)
     while not stop_event.is_set():
         try:
@@ -746,6 +746,7 @@ def main() -> None:
     )
     parser.add_argument("--metrics-off", action="store_true", help="Disable logging completely")
     parser.add_argument("--rover-out", action="store_true", help="Forward drive commands to local port 1238 (rover_bridge.py)")
+    parser.add_argument("--control-port", type=int, default=1239, help="TCP port for receiving configuration commands (default: 1239)")
 
     args = parser.parse_args()
 
@@ -803,7 +804,7 @@ def main() -> None:
     stop_event = threading.Event()
 
     threads = [
-        threading.Thread(target=control_thread, args=(stop_event, args.rover_out), name="ControlThread", daemon=True),
+        threading.Thread(target=control_thread, args=(stop_event, args.rover_out, args.control_port), name="ControlThread", daemon=True),
         threading.Thread(target=gaze_thread,    args=(stop_event,), name="GazeThread",    daemon=True),
         threading.Thread(
             target=camera_thread,
