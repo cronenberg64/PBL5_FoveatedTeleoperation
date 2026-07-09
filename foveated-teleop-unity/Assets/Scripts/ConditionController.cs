@@ -132,11 +132,10 @@ public class ConditionController : MonoBehaviour
                 msg = "$CFGuniform 050050\n";
                 break;
             case Condition.Foveated_15_85:
-                msg = "$CFGgaze    015085\n";
+                msg = "$CFGgaze    005090\n"; // calibrated to 5 and 90
                 break;
             case Condition.InverseFoveated_TBD:
-                // TODO: update to calibrated matched-bandwidth pair once bench sweep completes — see docs/PROTOCOL.md
-                msg = "$CFGgaze    050010\n";
+                msg = "$CFGgaze    090005\n"; // calibrated inverse to 90 and 5
                 break;
         }
 
