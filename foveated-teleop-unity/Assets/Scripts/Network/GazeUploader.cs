@@ -39,7 +39,7 @@ public class GazeUploader : MonoBehaviour
     {
         if (config == null)
         {
-            var rc = FindAnyObjectByType<RobotClient>();
+            var rc = FindAnyObjectByType<CameraFeedReceiver>();
             if (rc != null)
             {
                 var field = rc.GetType().GetField("config", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);

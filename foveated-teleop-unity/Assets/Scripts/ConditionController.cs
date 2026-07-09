@@ -29,6 +29,8 @@ public class ConditionController : MonoBehaviour
     private readonly object lockObj = new object();
     private string pendingCommand = null;
     private bool isConnected = false;
+    private string cachedIp = "127.0.0.1";
+    private int cachedPort = 1234;
 
     public Condition ActiveCondition => activeCondition;
 
@@ -50,7 +52,7 @@ public class ConditionController : MonoBehaviour
     {
         if (config == null)
         {
-            var rc = FindAnyObjectByType<RobotClient>();
+            var rc = FindAnyObjectByType<CameraFeedReceiver>();
             if (rc != null)
             {
                 var field = rc.GetType().GetField("config", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
@@ -65,6 +67,9 @@ public class ConditionController : MonoBehaviour
                 return;
             }
         }
+        
+        cachedIp = config.robotIP;
+        cachedPort = config.controlPort;
 
         cts = new CancellationTokenSource();
         connectThread = new Thread(() => ConnectionLoop(cts.Token));
@@ -166,8 +171,8 @@ public class ConditionController : MonoBehaviour
                 attempt++;
                 try
                 {
-                    string ip = config != null ? config.robotIP : "127.0.0.1";
-                    int port = config != null ? config.controlPort : 1234;
+                    string ip = cachedIp;
+                    int port = cachedPort;
                     Debug.Log($"[ConditionController] Connecting to control port {ip}:{port} (attempt {attempt})...");
                     
                     tcpClient = new TcpClient();

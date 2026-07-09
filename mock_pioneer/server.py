@@ -41,6 +41,7 @@ from metrics_server import MetricsServer
 _gaze_lock = threading.Lock()
 _latest_gaze: tuple[float, float] = (0.5, 0.5)
 _gaze_timestamp: float = 0.0          # epoch seconds of last valid gaze update
+_last_stale_log: float = 0.0          # epoch seconds of last stale log message
 _GAZE_STALE_TIMEOUT_S: float = 0.5   # fall back to centre after 500 ms
 
 _metrics: Optional[MetricsServer] = None
