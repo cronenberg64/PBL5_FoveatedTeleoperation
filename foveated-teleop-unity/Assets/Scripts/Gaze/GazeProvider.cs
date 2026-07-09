@@ -22,7 +22,7 @@ public class GazeProvider : MonoBehaviour
     }
 
     [Header("Gaze Mode Configuration")]
-    [SerializeField] private GazeMode gazeMode = GazeMode.Mouse;
+    [SerializeField] private GazeMode gazeMode = GazeMode.OpenXR;
 
     public GazeMode ActiveGazeMode => gazeMode;
 

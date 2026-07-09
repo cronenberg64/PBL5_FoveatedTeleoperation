@@ -111,18 +111,25 @@ public class ConditionController : MonoBehaviour
             pendingCommand = null;
         }
 
-        if (cmd != null && isConnected && stream != null)
+        if (cmd != null)
         {
-            try
+            if (isConnected && stream != null)
             {
-                byte[] data = Encoding.ASCII.GetBytes(cmd);
-                stream.Write(data, 0, data.Length);
-                Debug.Log($"[ConditionController] Sent command: {cmd.TrimEnd('\n')}");
+                try
+                {
+                    byte[] data = Encoding.ASCII.GetBytes(cmd);
+                    stream.Write(data, 0, data.Length);
+                    Debug.Log($"[ConditionController] ✅ SENT command: {cmd.TrimEnd('\n')}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[ConditionController] ❌ Send FAILED: {ex.Message}");
+                    MarkDisconnected();
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Debug.LogWarning($"[ConditionController] Send failed: {ex.Message}");
-                MarkDisconnected();
+                Debug.LogError($"[ConditionController] ❌ DROPPED command (not connected): {cmd.TrimEnd('\n')}  isConnected={isConnected}, stream={stream != null}");
             }
         }
     }
@@ -143,6 +150,8 @@ public class ConditionController : MonoBehaviour
                 msg = "$CFGgaze    090005\n"; // calibrated inverse to 90 and 5
                 break;
         }
+
+        Debug.Log($"[ConditionController] 🔄 SetCondition({c}) → queuing: {msg.TrimEnd('\n')}  (isConnected={isConnected})");
 
         lock (lockObj)
         {

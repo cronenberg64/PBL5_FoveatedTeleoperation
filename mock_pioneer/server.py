@@ -251,7 +251,10 @@ def _handle_cfg(line: str) -> None:
         _current_periph_quality = pq
         _current_fovea_quality = fq
         
-    print(f"[Control] Runtime config updated: mode={mode_str}, pq={pq}, fq={fq}")
+    print(f"\n{'='*60}")
+    print(f"[Control] ✅ CFG COMMAND RECEIVED AND APPLIED")
+    print(f"[Control]    mode={mode_str}, periph_q={pq}, fovea_q={fq}")
+    print(f"{'='*60}\n")
 
 _rover_out_sock = None
 
