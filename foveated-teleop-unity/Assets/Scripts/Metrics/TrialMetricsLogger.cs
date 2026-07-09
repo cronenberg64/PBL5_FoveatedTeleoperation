@@ -90,7 +90,7 @@ public class TrialMetricsLogger : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard != null)
         {
-            if (keyboard.spaceKey.wasPressedThisFrame) 
+            if (keyboard.enterKey.wasPressedThisFrame) 
             {
                 if (isTrialActive) successPressed = true;
                 else startPressed = true;

@@ -105,10 +105,17 @@ public class GazeTelemetryLogger : MonoBehaviour
         // 3. Eye Openness
         float leftOpen = 1f;
         float rightOpen = 1f;
-        if (XR_HTC_eye_tracker.Interop.GetEyeGeometricData(out XrSingleEyeGeometricDataHTC[] geometricData) && geometricData != null && geometricData.Length >= 2)
+        try
         {
-            if (geometricData[0].isValid) leftOpen = geometricData[0].eyeOpenness;
-            if (geometricData[1].isValid) rightOpen = geometricData[1].eyeOpenness;
+            if (XR_HTC_eye_tracker.Interop.GetEyeGeometricData(out XrSingleEyeGeometricDataHTC[] geometricData) && geometricData != null && geometricData.Length >= 2)
+            {
+                if (geometricData[0].isValid) leftOpen = geometricData[0].eyeOpenness;
+                if (geometricData[1].isValid) rightOpen = geometricData[1].eyeOpenness;
+            }
+        }
+        catch (Exception)
+        {
+            // Ignore exception if eye tracking is unavailable
         }
 
         // Blink detection (transition from > 0.2 to <= 0.2)
@@ -123,16 +130,23 @@ public class GazeTelemetryLogger : MonoBehaviour
         bool pupilValidLeft = false;
         bool pupilValidRight = false;
 
-        if (XR_HTC_eye_tracker.Interop.GetEyePupilData(out XrSingleEyePupilDataHTC[] pupilData) && pupilData != null && pupilData.Length >= 2)
+        try
         {
-            var l = pupilData[0];
-            var r = pupilData[1];
-            
-            pupilValidLeft = l.isDiameterValid;
-            if (pupilValidLeft) pupilDiamLeft = l.pupilDiameter;
-            
-            pupilValidRight = r.isDiameterValid;
-            if (pupilValidRight) pupilDiamRight = r.pupilDiameter;
+            if (XR_HTC_eye_tracker.Interop.GetEyePupilData(out XrSingleEyePupilDataHTC[] pupilData) && pupilData != null && pupilData.Length >= 2)
+            {
+                var l = pupilData[0];
+                var r = pupilData[1];
+                
+                pupilValidLeft = l.isDiameterValid;
+                if (pupilValidLeft) pupilDiamLeft = l.pupilDiameter;
+                
+                pupilValidRight = r.isDiameterValid;
+                if (pupilValidRight) pupilDiamRight = r.pupilDiameter;
+            }
+        }
+        catch (Exception)
+        {
+            // Ignore exception if pupil data is unavailable
         }
 
         // Write row to buffer
@@ -150,7 +164,7 @@ public class GazeTelemetryLogger : MonoBehaviour
             {
                 string data = writeBuffer.ToString();
                 writeBuffer.Clear();
-                csvWriter.WriteAsync(data);
+                csvWriter.Write(data);
             }
         }
     }

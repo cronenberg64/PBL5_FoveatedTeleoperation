@@ -12,3 +12,12 @@ Trial control: F5 start / F6 end-success / F7 end-fail
 
 Reminder: do not tell the subject which condition is active during 
 or before their session.
+
+## Calibrated Bandwidth-Matched Presets
+*These values were derived from the `bench_bandwidth` sweep to ensure equal network load across conditions (-0.9% delta).*
+
+| Condition | Periph Quality (PQ) | Fovea Quality (FQ) |
+|---|---|---|
+| **Uniform** | 50 | 50 |
+| **Foveated** | 5 | 90 |
+| **Inverse-Foveated** | 90 | 5 |

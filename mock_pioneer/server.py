@@ -513,6 +513,7 @@ def camera_thread(
             # Wait for a Unity client to connect
             try:
                 conn, addr = server_sock.accept()
+                conn.settimeout(None) # Prevent inheriting the 1.0s timeout from server_sock!
             except socket.timeout:
                 # If no client, but show is on, we still want to see the camera
                 if show:
@@ -597,12 +598,12 @@ def camera_thread(
                         
                         if _metrics:
                             # Compute condition_label
+                            cond_lbl = "Foveated" # Default fallback
                             if curr_fq > curr_pq:
                                 cond_lbl = "Foveated"
                             elif curr_pq > curr_fq:
                                 cond_lbl = "InverseFoveated"
-                            else:
-                                cond_lbl = "Foveated" # fallback
+
 
                             delta_ms = (t0 - gaze_ts) * 1000 if gaze_ts > 0 else 0.0
                             _metrics.log(
@@ -674,8 +675,8 @@ def main() -> None:
     parser.add_argument(
         "--mode",
         choices=["uniform", "gaze"],
-        default="uniform",
-        help="Camera encoding mode. 'uniform' = single JPEG. 'gaze' = dual-payload ROI. (default: uniform).",
+        default="gaze",
+        help="Camera encoding mode. 'uniform' = single JPEG. 'gaze' = dual-payload ROI. (default: gaze).",
     )
     parser.add_argument(
         "--quality",
@@ -687,16 +688,16 @@ def main() -> None:
     parser.add_argument(
         "--periph-quality",
         type=int,
-        default=15,
+        default=5,
         metavar="Q",
-        help="Gaze mode: periphery JPEG quality 1–100 (default: 15).",
+        help="Gaze mode: periphery JPEG quality 1–100 (default: 5).",
     )
     parser.add_argument(
         "--fovea-quality",
         type=int,
-        default=85,
+        default=90,
         metavar="Q",
-        help="Gaze mode: foveal crop JPEG quality 1–100 (default: 85).",
+        help="Gaze mode: foveal crop JPEG quality 1–100 (default: 90).",
     )
     parser.add_argument(
         "--fovea-size",
@@ -725,8 +726,8 @@ def main() -> None:
     parser.add_argument(
         "--camera-source",
         choices=["webcam", "unity", "rover"],
-        default="webcam",
-        help="Source of camera frames (default: webcam).",
+        default="rover",
+        help="Source of camera frames (default: rover).",
     )
     parser.add_argument(
         "--camera-index",

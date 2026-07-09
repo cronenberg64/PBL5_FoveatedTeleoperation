@@ -4,10 +4,18 @@ using VIVE.OpenXR.EyeTracker;
 
 public static class ViveGazeHelper
 {
+    private static float nextAllowedTime = 0f;
+
     public static bool TryGetGaze(out Vector3 position, out Quaternion rotation)
     {
         position = Vector3.zero;
         rotation = Quaternion.identity;
+
+        if (Time.unscaledTime < nextAllowedTime)
+        {
+            return false;
+        }
+
         try
         {
             if (XR_HTC_eye_tracker.Interop.GetEyeGazeData(out XrSingleEyeGazeDataHTC[] out_gazes))
@@ -43,6 +51,10 @@ public static class ViveGazeHelper
             }
         }
         catch {}
+
+        // If we reach here, the HTC plugin failed (e.g. XR_ERROR_SESSION_LOST because the headset is off).
+        // Apply a 2-second cooldown so it doesn't spam the console every frame.
+        nextAllowedTime = Time.unscaledTime + 2.0f;
         return false;
     }
 }

@@ -41,7 +41,7 @@ In this mode, the Workstation receives live video from the Mini PC and sends phy
    python server.py
    ```
 3. **Open the Scene in Unity**:
-   * Open `Assets/Scenes/DesktopFoveated.unity`.
+   * Open `Assets/Scenes/ViveFoveated.unity` (if using VR) or `DesktopFoveated.unity` (if running a desktop test with Tobii).
 4. **Press Play** in Unity to begin. The ESP32 should automatically connect to your Workstation, and the video feed will start streaming.
 
 ---
@@ -69,3 +69,23 @@ While the Unity scene is running, you can dynamically switch between rendering m
 *   **Press 3**: **Inverse-Foveated** (`InverseFoveated_TBD`) — Reversed gaze-contingency! Periphery is sharp while the gaze focal point is pixelated and degraded.
 
 **Driving Controls**: Press **W/A/S/D** to steer/drive, and **Space** to apply brakes. Gear shifting is mapped to the **A Button** on VR controllers.
+
+---
+
+### Logging & User Study Controls
+
+During a user study, you must tell Unity which task the user is performing *before* starting the trial timer. 
+
+1. **Select Task Scenario**: Press one of the following keys to label the upcoming trial in the CSV:
+   * **Press 7 (or C)**: Corridor (Navigation Task)
+   * **Press 8 (or D)**: Doorway (Identification Task)
+   * **Press 9 (or O)**: Obstacle (Visual Search Task)
+
+2. **Select Rendering Condition**:
+   * **Press 1, 2, or 3** to set the foveation mode (Uniform, Foveated, Inverse).
+   * *Note: You cannot change the condition while a trial is actively recording!*
+
+3. **Start/Stop Trial (CSV Logging)**:
+   * Press **Enter** on the keyboard (or the **A** button on the VR controller) to **Start** the trial timer.
+   * Press **Enter** again (or the **B** button on the VR controller) to **End** the trial and save the CSV row.
+   * *Warning: Do not double-press or mash the Start/Stop buttons, or you may cause a file sharing violation on the CSV.*
