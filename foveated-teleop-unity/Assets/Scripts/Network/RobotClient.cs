@@ -100,9 +100,10 @@ public class RobotClient : MonoBehaviour
     {
         try
         {
-            tcpListener = new TcpListener(IPAddress.Any, config.esp32Port);
+            int port = config.esp32Port;
+            tcpListener = new TcpListener(IPAddress.Any, port);
             tcpListener.Start();
-            Debug.Log($"[RobotClient] TCP Server listening on port {config.esp32Port} for ESP32...");
+            Debug.Log($"[RobotClient] TCP Server listening on port {port} for ESP32...");
             
             while (!token.IsCancellationRequested)
             {
