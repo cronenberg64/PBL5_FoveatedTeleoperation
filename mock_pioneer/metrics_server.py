@@ -29,6 +29,7 @@ class MetricsServer:
         "crop_w",
         "crop_h",
         "delta_ms",
+        "condition_label",
     ]
 
     def __init__(self, log_dir: str = "logs") -> None:
@@ -56,6 +57,7 @@ class MetricsServer:
         crop_w: str = "",
         crop_h: str = "",
         delta_ms: str = "",
+        condition_label: str = "",
     ) -> None:
         """
         Append one row to the session CSV.
@@ -88,6 +90,7 @@ class MetricsServer:
             "crop_w": crop_w,
             "crop_h": crop_h,
             "delta_ms": delta_ms,
+            "condition_label": condition_label,
         }
         try:
             self._writer.writerow(row)
