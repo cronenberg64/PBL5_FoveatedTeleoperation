@@ -12,8 +12,8 @@ public class ConditionController : MonoBehaviour
     public enum Condition
     {
         UniformQ50,
-        Foveated_15_85,
-        InverseFoveated_TBD
+        Foveated_90_5,
+        InverseFoveated_5_90
     }
 
     [Header("Configuration")]
@@ -94,11 +94,11 @@ public class ConditionController : MonoBehaviour
                 }
                 else if (keyboard.digit2Key.wasPressedThisFrame || keyboard.numpad2Key.wasPressedThisFrame)
                 {
-                    SetCondition(Condition.Foveated_15_85);
+                    SetCondition(Condition.Foveated_90_5);
                 }
                 else if (keyboard.digit3Key.wasPressedThisFrame || keyboard.numpad3Key.wasPressedThisFrame)
                 {
-                    SetCondition(Condition.InverseFoveated_TBD);
+                    SetCondition(Condition.InverseFoveated_5_90);
                 }
             }
         }
@@ -143,10 +143,10 @@ public class ConditionController : MonoBehaviour
             case Condition.UniformQ50:
                 msg = "$CFGuniform 050050\n";
                 break;
-            case Condition.Foveated_15_85:
+            case Condition.Foveated_90_5:
                 msg = "$CFGgaze    005090\n"; // calibrated to 5 and 90
                 break;
-            case Condition.InverseFoveated_TBD:
+            case Condition.InverseFoveated_5_90:
                 msg = "$CFGgaze    090005\n"; // calibrated inverse to 90 and 5
                 break;
         }
@@ -164,7 +164,7 @@ public class ConditionController : MonoBehaviour
             FoveatedFeedController ffc = FindAnyObjectByType<FoveatedFeedController>();
             if (ffc != null)
             {
-                ffc.SetFoveationEnabled(c == Condition.Foveated_15_85 || c == Condition.InverseFoveated_TBD);
+                ffc.SetFoveationEnabled(c == Condition.Foveated_90_5 || c == Condition.InverseFoveated_5_90);
             }
         }
     }

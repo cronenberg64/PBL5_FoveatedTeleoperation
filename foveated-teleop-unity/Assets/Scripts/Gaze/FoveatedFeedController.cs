@@ -85,7 +85,7 @@ public class FoveatedFeedController : MonoBehaviour
         }
 
         // Fetch active condition from ConditionController (fallback to Foveated if not found)
-        ConditionController.Condition activeCondition = ConditionController.Condition.Foveated_15_85;
+        ConditionController.Condition activeCondition = ConditionController.Condition.Foveated_90_5;
         if (ConditionController.Instance != null)
         {
             activeCondition = ConditionController.Instance.ActiveCondition;
@@ -99,13 +99,13 @@ public class FoveatedFeedController : MonoBehaviour
             // We can optionally return here if we don't want to draw fovea tex at all
             // But updating CropRect is harmless and ensures it never gets stuck
         }
-        else if (activeCondition == ConditionController.Condition.InverseFoveated_TBD)
+        else if (activeCondition == ConditionController.Condition.InverseFoveated_5_90)
         {
             // 3. Inverse-Foveated Mode: Periphery is sharp (1f), Fovea is low quality patch from server
             feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
             feedMaterial.SetFloat(PeripheryPixelSizeId, 1f);
         }
-        else // ConditionController.Condition.Foveated_15_85
+        else // ConditionController.Condition.Foveated_90_5
         {
             // 2. Foveated Mode: Foveal circle is sharp, periphery is blurred
             feedMaterial.SetFloat(FoveaRadiusId, foveaRadius);
