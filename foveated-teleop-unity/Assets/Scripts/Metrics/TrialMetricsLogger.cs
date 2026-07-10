@@ -160,8 +160,8 @@ public class TrialMetricsLogger : MonoBehaviour
         switch (scenario)
         {
             case "Corridor": return "Navigation";
-            case "Doorway": return "Visual Search";
-            case "Obstacle": return "Obstacle Avoidance";
+            case "Doorway": return "Identification";
+            case "Obstacle": return "Visual Search";
             default: return scenario;
         }
     }

@@ -65,8 +65,8 @@ In this mode, Unity captures the virtual 3D corridor, sends it to Python over TC
 While the Unity scene is running, you can dynamically switch between rendering modes using these keyboard hotkeys:
 
 *   **Press 1**: **Uniform Mode** (`UniformQ50`) — Uniform quality across the entire screen (no foveation).
-*   **Press 2**: **Foveated Mode** (`Foveated_15_85`) — Gaze-contingent foveation enabled! Periphery is rendered at Quality 15, while a high-resolution circle follows your cursor at Quality 85.
-*   **Press 3**: **Inverse-Foveated** (`InverseFoveated_TBD`) — Reversed gaze-contingency! Periphery is sharp while the gaze focal point is pixelated and degraded.
+*   **Press 2**: **Foveated Mode** (`Foveated_90_5`) — Gaze-contingent foveation enabled! Periphery is rendered at Quality 5, while a high-resolution circle follows your cursor at Quality 90.
+*   **Press 3**: **Inverse-Foveated** (`InverseFoveated_5_90`) — Reversed gaze-contingency! Periphery is sharp while the gaze focal point is pixelated and degraded.
 
 **Driving Controls**: Press **W/A/S/D** to steer/drive, and **Space** to apply brakes. Gear shifting is mapped to the **A Button** on VR controllers.
 
