@@ -155,6 +155,17 @@ public class TrialMetricsLogger : MonoBehaviour
         UpdateHUD();
     }
 
+    private string GetTaskName(string scenario)
+    {
+        switch (scenario)
+        {
+            case "Corridor": return "Navigation";
+            case "Doorway": return "Visual Search";
+            case "Obstacle": return "Obstacle Avoidance";
+            default: return scenario;
+        }
+    }
+
     private void UpdateHUD()
     {
         if (statusText == null && Camera.main != null)
@@ -165,7 +176,8 @@ public class TrialMetricsLogger : MonoBehaviour
         if (statusText != null)
         {
             string state = isTrialActive ? "<color=#00FF00>RECORDING TRIAL</color>" : "<color=#FF0000>NOT RECORDING</color>";
-            statusText.text = $"{state}\nScenario: {CurrentScenario}\nCondition: {CurrentCondition}\nTrial: {trialId} | Time: {ElapsedTime:F1}s";
+            string taskName = GetTaskName(CurrentScenario);
+            statusText.text = $"{state}\nTask: {taskName}\nCondition: {CurrentCondition}\nTrial: {trialId} | Time: {ElapsedTime:F1}s";
         }
     }
 
