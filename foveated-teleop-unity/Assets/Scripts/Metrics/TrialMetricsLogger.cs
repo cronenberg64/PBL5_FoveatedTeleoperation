@@ -88,14 +88,15 @@ public class TrialMetricsLogger : MonoBehaviour
 
         GameObject hudObj = new GameObject("VRStatusHUD");
         hudObj.transform.SetParent(Camera.main.transform);
-        hudObj.transform.localPosition = new Vector3(0, -0.25f, 1.2f);
+        // Position it top left relative to the camera
+        hudObj.transform.localPosition = new Vector3(-0.6f, 0.4f, 1.0f);
         hudObj.transform.localRotation = Quaternion.identity;
 
         statusText = hudObj.AddComponent<TextMesh>();
-        statusText.characterSize = 0.012f;
+        statusText.characterSize = 0.004f;
         statusText.fontSize = 64;
-        statusText.anchor = TextAnchor.MiddleCenter;
-        statusText.alignment = TextAlignment.Center;
+        statusText.anchor = TextAnchor.UpperLeft;
+        statusText.alignment = TextAlignment.Left;
         statusText.richText = true;
     }
 
