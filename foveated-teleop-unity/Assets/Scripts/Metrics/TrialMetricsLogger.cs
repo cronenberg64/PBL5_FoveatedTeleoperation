@@ -24,6 +24,7 @@ public class TrialMetricsLogger : MonoBehaviour
     private int collisionCount = 0;
     private bool isTrialActive = false;
     private float lastCompletionTime = 0f;
+    private string currentTelemetryPath;
 
     private string csvFilePath;
     private string sessionTimestamp;
@@ -166,8 +167,8 @@ public class TrialMetricsLogger : MonoBehaviour
         if (gazeTelemetry != null)
         {
             string logsDir = Path.Combine(Application.dataPath, "../logs");
-            string telemetryPath = Path.Combine(logsDir, $"gaze_telemetry_SubjX_Trial{trialId}_{sessionTimestamp}.csv");
-            gazeTelemetry.StartLogging(telemetryPath);
+            currentTelemetryPath = Path.Combine(logsDir, $"gaze_telemetry_SubjX_Trial{trialId}_{sessionTimestamp}.csv");
+            gazeTelemetry.StartLogging(currentTelemetryPath);
         }
 
         Debug.Log($"[TrialMetricsLogger] Trial {trialId} STARTED: {scenario} ({condition})");
@@ -189,6 +190,27 @@ public class TrialMetricsLogger : MonoBehaviour
         if (gazeTelemetry != null)
         {
             gazeTelemetry.StopLogging(out blinkRate);
+            
+            // Automatically move successful trial telemetry to a dedicated study folder
+            if (success && !string.IsNullOrEmpty(currentTelemetryPath) && File.Exists(currentTelemetryPath))
+            {
+                try
+                {
+                    string logsDir = Path.Combine(Application.dataPath, "../logs");
+                    string studyDir = Path.Combine(logsDir, "study_logs");
+                    if (!Directory.Exists(studyDir))
+                    {
+                        Directory.CreateDirectory(studyDir);
+                    }
+                    string destPath = Path.Combine(studyDir, Path.GetFileName(currentTelemetryPath));
+                    File.Move(currentTelemetryPath, destPath);
+                    Debug.Log($"[TrialMetricsLogger] Moved successful trial log to {destPath}");
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"[TrialMetricsLogger] Failed to move study log: {ex.Message}");
+                }
+            }
         }
 
         WriteCsvRow(success, blinkRate);
