@@ -28,6 +28,7 @@ public class TrialMetricsLogger : MonoBehaviour
     private string csvFilePath;
     private string sessionTimestamp;
     private GazeTelemetryLogger gazeTelemetry;
+    private TextMesh statusText;
 
     // Public properties for external components and HUD
     public int TrialId => trialId;
@@ -81,6 +82,23 @@ public class TrialMetricsLogger : MonoBehaviour
         WriteCsvHeader();
     }
 
+    private void SetupVRHUD()
+    {
+        if (Camera.main == null) return;
+
+        GameObject hudObj = new GameObject("VRStatusHUD");
+        hudObj.transform.SetParent(Camera.main.transform);
+        hudObj.transform.localPosition = new Vector3(0, -0.25f, 1.2f);
+        hudObj.transform.localRotation = Quaternion.identity;
+
+        statusText = hudObj.AddComponent<TextMesh>();
+        statusText.characterSize = 0.012f;
+        statusText.fontSize = 64;
+        statusText.anchor = TextAnchor.MiddleCenter;
+        statusText.alignment = TextAlignment.Center;
+        statusText.richText = true;
+    }
+
     private void Update()
     {
         bool startPressed = false;
@@ -132,7 +150,24 @@ public class TrialMetricsLogger : MonoBehaviour
         {
             EndTrial(false);
         }
+
+        UpdateHUD();
     }
+
+    private void UpdateHUD()
+    {
+        if (statusText == null && Camera.main != null)
+        {
+            SetupVRHUD();
+        }
+
+        if (statusText != null)
+        {
+            string state = isTrialActive ? "<color=#00FF00>RECORDING TRIAL</color>" : "<color=#FF0000>NOT RECORDING</color>";
+            statusText.text = $"{state}\nScenario: {CurrentScenario}\nCondition: {CurrentCondition}\nTrial: {trialId} | Time: {ElapsedTime:F1}s";
+        }
+    }
+
 
     public void StartTrial(string scenario, string condition)
     {
