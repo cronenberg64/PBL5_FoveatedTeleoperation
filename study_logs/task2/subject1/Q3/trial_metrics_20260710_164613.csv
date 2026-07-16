@@ -1,2 +1,2 @@
 ﻿TrialID,Scenario,Condition,StartTime,EndTime,DurationSeconds,Success,Collisions,BlinkRatePerMin
-4,Doorway,InverseFoveated_5_90,17:09:28.527,17:09:42.260,13.75,1,0,0.00
+4,Identification,InverseFoveated_5_90,17:09:28.527,17:09:42.260,13.75,1,0,0.00

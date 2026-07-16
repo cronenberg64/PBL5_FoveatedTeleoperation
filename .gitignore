@@ -1,7 +1,6 @@
 # Python
 mock_pioneer/.venv/
 mock_pioneer/__pycache__/
-mock_pioneer/logs/*.csv
 *.pyc
 
 # macOS

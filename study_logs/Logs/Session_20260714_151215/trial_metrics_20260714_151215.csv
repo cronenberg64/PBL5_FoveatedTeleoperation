@@ -1,0 +1,11 @@
+﻿TrialID,Scenario,Condition,StartTime,EndTime,DurationSeconds,Success,Collisions,BlinkRatePerMin
+1,Navigation,InverseFoveated_5_90,15:19:41.012,15:22:00.341,139.32,1,0,0.00
+2,Navigation,InverseFoveated_5_90,15:22:53.042,15:22:58.358,5.32,1,0,0.00
+3,Navigation,Foveated_90_5,15:25:16.411,15:26:52.645,96.23,1,0,0.00
+4,Navigation,UniformQ50,15:28:35.303,15:29:50.207,74.91,1,0,0.00
+5,Identification,InverseFoveated_5_90,15:38:58.709,15:39:40.612,41.90,1,0,0.00
+6,Identification,Foveated_90_5,15:39:54.510,15:40:57.186,62.67,1,0,0.00
+7,Identification,UniformQ50,15:41:08.542,15:42:04.707,56.18,1,0,0.00
+8,Visual Search,InverseFoveated_5_90,15:51:42.466,15:53:49.749,127.27,1,0,0.00
+9,Visual Search,Foveated_90_5,16:03:43.099,16:08:00.964,257.87,1,0,0.00
+10,Visual Search,UniformQ50,16:18:10.060,16:18:17.667,7.62,1,0,0.00

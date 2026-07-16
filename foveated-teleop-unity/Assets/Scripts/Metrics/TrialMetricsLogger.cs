@@ -214,7 +214,10 @@ public class TrialMetricsLogger : MonoBehaviour
         if (gazeTelemetry != null)
         {
             string logsDir = Path.Combine(Application.dataPath, "../logs");
-            string telemetryPath = Path.Combine(logsDir, $"gaze_telemetry_SubjX_Trial{trialId}_{sessionTimestamp}.csv");
+            string taskName = GetTaskName(scenario);
+            string safeScenario = taskName.Replace(" ", "_");
+            string safeCondition = condition.Replace(" ", "_");
+            string telemetryPath = Path.Combine(logsDir, $"gaze_telemetry_SubjX_{safeScenario}_{safeCondition}_Trial{trialId}_{sessionTimestamp}.csv");
             gazeTelemetry.StartLogging(telemetryPath);
         }
 
@@ -281,7 +284,8 @@ public class TrialMetricsLogger : MonoBehaviour
     {
         try
         {
-            string row = $"{trialId},{activeScenario},{activeCondition},{trialStartTimeStr},{trialEndTimeStr},{lastCompletionTime:F2},{(success ? 1 : 0)},{collisionCount},{blinkRate:F2}\n";
+            string taskName = GetTaskName(activeScenario);
+            string row = $"{trialId},{taskName},{activeCondition},{trialStartTimeStr},{trialEndTimeStr},{lastCompletionTime:F2},{(success ? 1 : 0)},{collisionCount},{blinkRate:F2}\n";
             File.AppendAllText(csvFilePath, row, Encoding.UTF8);
             Debug.Log($"[TrialMetricsLogger] Wrote metrics row to CSV for trial {trialId}");
         }
