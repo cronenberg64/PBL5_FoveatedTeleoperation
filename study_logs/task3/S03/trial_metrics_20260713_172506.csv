@@ -1,2 +1,4 @@
 ﻿TrialID,Scenario,Condition,StartTime,EndTime,DurationSeconds,Success,Collisions,BlinkRatePerMin
 1,Navigation,UniformQ50,17:31:31.919,17:38:46.988,435.08,1,0,0.00
+2,Navigation,Foveated_90_5,18:07:40.584,18:09:14.300,93.72,1,0,0.10
+3,Visual Search,InverseFoveated_5_90,19:42:08.557,19:44:44.563,156.01,1,0,0.00
