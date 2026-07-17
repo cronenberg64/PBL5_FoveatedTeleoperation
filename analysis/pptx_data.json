@@ -14,21 +14,5 @@
             "Never": 1
         }
     },
-    "stats": {
-        "Navigation_duration_friedman_p": 0.1353352832366127,
-        "Identification_duration_friedman_p": 0.04076220397836622,
-        "Visual Search_duration_friedman_p": 0.4723665527410149,
-        "Navigation_tlx_mental_demand_p": 0.019129536225545016,
-        "Identification_tlx_mental_demand_p": 0.24145971495638432,
-        "Visual Search_tlx_mental_demand_p": 0.04033537853783454,
-        "Navigation_tlx_physical_demand_p": 0.0848672789700174,
-        "Identification_tlx_physical_demand_p": 0.36787944117144245,
-        "Visual Search_tlx_physical_demand_p": 0.6065306597126334,
-        "Navigation_tlx_frustration_p": 0.09173155121985656,
-        "Identification_tlx_frustration_p": 0.2110720877910903,
-        "Visual Search_tlx_frustration_p": 0.07427357821433386,
-        "Navigation_tlx_overall_workload_(rtlx)_p": 0.0418395571572068,
-        "Identification_tlx_overall_workload_(rtlx)_p": 0.24659696394160638,
-        "Visual Search_tlx_overall_workload_(rtlx)_p": 0.4493289641172217
-    }
+    "stats": {}
 }
