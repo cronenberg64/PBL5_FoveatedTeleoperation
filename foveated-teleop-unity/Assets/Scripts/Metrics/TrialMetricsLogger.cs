@@ -200,7 +200,8 @@ public class TrialMetricsLogger : MonoBehaviour
 
         if (isTrialActive)
         {
-            Debug.LogWarning("[TrialMetricsLogger] StartTrial called but a trial is already active. Restarting timer.");
+            Debug.LogWarning("[TrialMetricsLogger] StartTrial called but a trial is already active. Ignoring to prevent telemetry corruption.");
+            return;
         }
 
         isTrialActive = true;

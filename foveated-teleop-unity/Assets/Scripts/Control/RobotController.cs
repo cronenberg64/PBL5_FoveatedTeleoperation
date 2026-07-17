@@ -114,37 +114,14 @@ public class RobotController : MonoBehaviour
                 ResetRobot();
             }
         }
-        // Handle Trial shortcuts from VR Controllers
-        if (TrialMetricsLogger.Instance != null)
-        {
-            if (startTrialAction.WasPressedThisFrame() && !TrialMetricsLogger.Instance.IsTrialActive)
-            {
-                TrialMetricsLogger.Instance.StartTrial("VR_Trial", ConditionController.Instance != null ? ConditionController.Instance.ActiveCondition.ToString() : "Unknown");
-            }
-            if (TrialMetricsLogger.Instance.IsTrialActive)
-            {
-                if (endSuccessAction.WasPressedThisFrame())
-                {
-                    TrialMetricsLogger.Instance.EndTrial(true);
-                }
-                else if (endFailAction.WasPressedThisFrame())
-                {
-                    TrialMetricsLogger.Instance.EndTrial(false);
-                }
-            }
-        }
+        // Virtual testing shortcuts removed by request.
     }
 
     private void FixedUpdate()
     {
-        if (rb == null) return;
-
         if (isBraking)
         {
-            // Apply strong braking
-            rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
-            rb.angularVelocity = Vector3.zero;
-            return;
+            // Apply strong braking (simulated by sending neutral commands to the physical robot later in the loop)
         }
 
         // WASD inputs
@@ -264,14 +241,8 @@ public class RobotController : MonoBehaviour
             robotClient.SendDriveCommand(cmd, turn, speed);
         }
 
-        // Move forward/backward along local Z axis
-        Vector3 targetVelocity = transform.forward * moveInput * moveSpeed;
-        targetVelocity.y = rb.linearVelocity.y; // Keep vertical physics if any
-        rb.linearVelocity = targetVelocity;
-
-        // Turn left/right along local Y axis
-        float turnAmount = turnInput * turnSpeed * Time.fixedDeltaTime;
-        rb.MoveRotation(rb.rotation * Quaternion.Euler(0f, turnAmount, 0f));
+        // Local Rigidbody physics and virtual testing movement have been entirely removed
+        // to prevent any accidental collisions with virtual environments.
     }
 
     public void ResetRobot()

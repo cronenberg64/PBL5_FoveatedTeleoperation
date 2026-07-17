@@ -1,0 +1,4 @@
+﻿TrialID,Scenario,Condition,StartTime,EndTime,DurationSeconds,Success,Collisions,BlinkRatePerMin
+5,Identification,InverseFoveated_5_90,15:38:58.709,15:39:40.612,41.90,1,0,0.00
+6,Identification,Foveated_90_5,15:39:54.510,15:40:57.186,62.67,1,0,0.00
+7,Identification,UniformQ50,15:41:08.542,15:42:04.707,56.18,1,0,0.00

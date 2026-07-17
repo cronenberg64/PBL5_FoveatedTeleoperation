@@ -1,0 +1,2 @@
+﻿TrialID,Scenario,Condition,StartTime,EndTime,DurationSeconds,Success,Collisions,BlinkRatePerMin
+1,Navigation,UniformQ50,20:36:53.020,20:40:52.760,239.75,1,0,0.46

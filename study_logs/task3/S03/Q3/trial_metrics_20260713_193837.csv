@@ -1,0 +1,2 @@
+TrialID,Scenario,Condition,StartTime,EndTime,DurationSeconds,Success,Collisions,BlinkRatePerMin
+1,Visual Search,InverseFoveated_5_90,19:42:08.557,19:44:44.563,156.01,1,0,0.00
