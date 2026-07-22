@@ -1,10 +1,14 @@
 # Python
-mock_pioneer/.venv/
-mock_pioneer/__pycache__/
+__pycache__/
 *.pyc
+mock_pioneer/.venv/
+mock_pioneer/venv/
 
 # macOS
 .DS_Store
 
-.vscode
+# IDE
+.vscode/
+
+# Archives
 *.tgz
