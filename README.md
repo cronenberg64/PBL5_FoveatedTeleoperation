@@ -4,13 +4,12 @@ A Unity-based teleoperation system for Pioneer robots, featuring **Gaze-Continge
 
 ## Core Features
 
-- **Gaze-Contingent Foveated Rendering**: A custom HLSL shader renders a high-quality "Foveal Circle" (Quality 90) at the user's focus point while pixelating the periphery (Quality 5) to simulate bandwidth savings.
+- **Gaze-Contingent Foveated Rendering**: A custom HLSL shader renders a high-quality "Foveal Circle" (Quality 95) at the user's focus point while pixelating the periphery (Quality 5) to simulate bandwidth savings.
 - **VIVE Focus Vision Integration**: Supports hardware eye-tracking via OVRPlugin for gaze-contingent streaming.
-- **Modern Input System**: Uses Unity's Action-based Input System.
-  - **Accelerator**: Right Trigger
-  - **Brake**: Left Trigger
-  - **Gear Shift**: A Button (toggles Forward/Reverse)
-  - **Steer**: Right Thumbstick X
+- **Hardware Teleoperation Controls**: Integrated with the **Serafim R1+ Steering Wheel and Pedal Dock** via Unity's Action-based Input System.
+  - **Accelerator**: Gas Pedal
+  - **Brake**: Brake Pedal
+  - **Steering**: Steering Wheel
 - **TCP Protocol Baseline**: Reconstructed `$CMD + turn(3) + speed(3) + \n` protocol for communication with the physical Pioneer robot.
 
 ## Hardware Architecture
@@ -30,16 +29,21 @@ The system operates on a physical Pioneer-style rover using a decentralized netw
 ### Running a Live Teleoperation Session
 
 1. **Power up the Rover**:
-   * Hook up the main battery to power the Mini PC.
-   * Power on the ESP32 and ensure it connects to the lab WiFi.
+   * Connect the 2 batteries on the rover (one for the motor and the other for the miniPC)
+   * Plug in the monitor, keyboard, and mouse to the Mini PC
+   * Power on the miniPC and ensure it connects to the lab WiFi
 2. **Start the Python Camera Server** (on the Mini PC):
    ```bash
    cd mock_pioneer
-   python server.py --camera-source rover --mode gaze
+   python server.py
    ```
+   * Once the server is running and streaming starts, unplug the monitor, keyboard, and mouse from the Mini PC so the rover can navigate without trailing cables
 3. **Open the Scene in Unity**:
-   * Open `Assets/Scenes/ViveFoveated.unity` (VR) or `DesktopFoveated.unity` (desktop with Tobii).
+   * Open `Assets/Scenes/ViveFoveated.unity` or `DesktopFoveated.unity`
 4. **Press Play** in Unity to begin. The ESP32 should automatically connect to your Workstation, and the video feed will start streaming.
+
+> [!Note]
+> **Troubleshooting Eye Tracking / Foveated Rendering**: If gaze-contingent foveated rendering or eye tracking is not functioning in VR, SteamVR may have failed to detect the headset's eye-tracking runtime at launch. Restart the headset and Unity (or restart SteamVR or delete VIVE business streaming from runtime), then press Play again.
 
 ---
 
@@ -51,7 +55,7 @@ While the Unity scene is running, you can dynamically switch between rendering m
 *   **Press 2**: **Foveated Mode** (`Foveated_90_5`) — Gaze-contingent foveation enabled! Periphery is rendered at Quality 5, while a high-resolution circle follows your gaze at Quality 90.
 *   **Press 3**: **Inverse-Foveated** (`InverseFoveated_5_90`) — Reversed gaze-contingency! Periphery is sharp while the gaze focal point is pixelated and degraded.
 
-**Driving Controls**: Press **W/A/S/D** to steer/drive, and **Space** to apply brakes. Gear shifting is mapped to the **A Button** on VR controllers.
+**Driving Controls**: Teleoperation is controlled using a **Serafim R1+ Steering Wheel and Pedal Set** connected to the Workstation PC (Gas Pedal = Accelerator, Brake Pedal = Brake, Wheel = Steering). Keyboard fallbacks (**W/A/S/D** to steer/drive, **Space** to brake) are also supported.
 
 ---
 
@@ -65,12 +69,12 @@ During a user study, you must tell Unity which task the participant is performin
    * **Press 9 (or O)**: Visual Search Task
 
 2. **Select Rendering Condition**:
-   * **Press 1, 2, or 3** to set the foveation mode (Uniform, Foveated, Inverse).
-   * *Note: You cannot change the condition while a trial is actively recording!*
+   * **Press 1, 2, or 3** to set the foveation mode (Uniform, Foveated, Inverse)
+   * *Note: You cannot change the condition while a trial is actively recording*
 
 3. **Start/Stop Trial (CSV Logging)**:
-   * Press **Enter** on the keyboard (or the **A** button on the VR controller) to **Start** the trial timer.
-   * Press **Enter** again (or the **B** button on the VR controller) to **End** the trial and save the CSV row.
+   * Press **Enter** on the keyboard to start the trial timer
+   * Press **Enter** again to end the trial and save the CSV row
 
 ---
 
